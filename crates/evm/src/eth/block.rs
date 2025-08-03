@@ -207,8 +207,9 @@ where
             .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
 
         // call state hook with changes due to balance increments.
+        let chain_id = self.evm.chain_id();
         self.system_caller.try_on_state_with(|| {
-            balance_increment_state(&balance_increments, self.evm.db_mut()).map(|state| {
+            balance_increment_state(&balance_increments, self.evm.db_mut(), chain_id).map(|state| {
                 (
                     StateChangeSource::PostBlock(StateChangePostBlockSource::BalanceIncrements),
                     Cow::Owned(state),

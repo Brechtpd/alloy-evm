@@ -10,6 +10,7 @@ use core::{
 use revm::{
     context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
     context_interface::result::{EVMError, HaltReason, ResultAndState},
+    primitives::ChainAddress,
     handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
     inspector::NoOpInspector,
     interpreter::{interpreter::EthInterpreter, InterpreterResult},
@@ -134,8 +135,9 @@ where
         contract: Address,
         data: Bytes,
     ) -> Result<ResultAndState, Self::Error> {
+        let chain_id = self.chain_id();
         let tx = TxEnv {
-            caller,
+            caller: ChainAddress::new(chain_id, caller),
             kind: TxKind::Call(contract),
             // Explicitly set nonce to 0 so revm does not do any nonce checks
             nonce: 0,
@@ -156,6 +158,7 @@ where
             max_fee_per_blob_gas: 0,
             tx_type: 0,
             authorization_list: Default::default(),
+            chain_ids: None,
         };
 
         let mut gas_limit = tx.gas_limit;
@@ -185,7 +188,7 @@ where
         // We're doing this state cleanup to make sure that changeset only includes the changed
         // contract storage.
         if let Ok(res) = &mut res {
-            res.state.retain(|addr, _| *addr == contract);
+            res.state.retain(|addr, _| addr.address() == contract);
         }
 
         res
