@@ -388,7 +388,7 @@ mod op {
             } = tx;
             Self {
                 tx_type: tx.ty(),
-                caller,
+                caller: ChainAddress(1, caller),
                 gas_limit: *gas_limit,
                 kind: *to,
                 value: *value,
