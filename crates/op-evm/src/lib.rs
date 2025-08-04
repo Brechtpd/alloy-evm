@@ -12,6 +12,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use alloy_evm::{precompiles::PrecompilesMap, Database, Evm, EvmEnv, EvmFactory};
 use alloy_primitives::{Address, Bytes, TxKind, U256};
+use revm::primitives::ChainAddress;
 use core::{
     fmt::Debug,
     ops::{Deref, DerefMut},
@@ -125,9 +126,10 @@ where
         contract: Address,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+        let chain_id = self.chain_id();
         let tx = OpTransaction {
             base: TxEnv {
-                caller,
+                caller: ChainAddress::new(chain_id, caller),
                 kind: TxKind::Call(contract),
                 // Explicitly set nonce to 0 so revm does not do any nonce checks
                 nonce: 0,
@@ -149,6 +151,7 @@ where
                 max_fee_per_blob_gas: 0,
                 tx_type: OpTxType::Deposit as u8,
                 authorization_list: Default::default(),
+                chain_ids: None,
             },
             // The L1 fee is not charged for the EIP-4788 transaction, submit zero bytes for the
             // enveloped tx size.
@@ -183,7 +186,7 @@ where
         // We're doing this state cleanup to make sure that changeset only includes the changed
         // contract storage.
         if let Ok(res) = &mut res {
-            res.state.retain(|addr, _| *addr == contract);
+            res.state.retain(|addr, _| addr.address() == contract);
         }
 
         res
