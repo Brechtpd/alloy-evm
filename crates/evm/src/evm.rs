@@ -10,12 +10,12 @@ use revm::{
         ContextTr,
     },
     inspector::{JournalExt, NoOpInspector},
-    DatabaseCommit, Inspector,
+    DatabaseCommit, Inspector, MultiChainDatabase, MultiChainDatabaseCommit,
 };
 
-/// Helper trait to bound [`revm::Database::Error`] with common requirements.
-pub trait Database: revm::Database<Error: Error + Send + Sync + 'static> {}
-impl<T> Database for T where T: revm::Database<Error: Error + Send + Sync + 'static> {}
+/// Helper trait to bound [`revm::MultiChainDatabase::Error`] with common requirements.
+pub trait Database: revm::MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
+impl<T> Database for T where T: revm::MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
 
 /// An instance of an ethereum virtual machine.
 ///
@@ -89,10 +89,10 @@ pub trait Evm {
         tx: impl IntoTxEnv<Self::Tx>,
     ) -> Result<ExecutionResult<Self::HaltReason>, Self::Error>
     where
-        Self::DB: DatabaseCommit,
+        Self::DB: MultiChainDatabaseCommit,
     {
         let ResultAndState { result, state } = self.transact(tx)?;
-        self.db_mut().commit(state);
+        self.db_mut().commit_multi(state);
 
         Ok(result)
     }

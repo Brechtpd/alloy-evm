@@ -11,7 +11,7 @@ use alloy_eips::{
 };
 use alloy_hardforks::EthereumHardforks;
 use alloy_primitives::{Bytes, B256};
-use revm::{state::EvmState, DatabaseCommit};
+use revm::{state::EvmState, MultiChainDatabaseCommit};
 
 use super::{StateChangePostBlockSource, StateChangePreBlockSource, StateChangeSource};
 
@@ -53,7 +53,7 @@ where
     pub fn apply_pre_execution_changes(
         &mut self,
         header: impl BlockHeader,
-        evm: &mut impl Evm<DB: DatabaseCommit>,
+        evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<(), BlockExecutionError> {
         self.apply_blockhashes_contract_call(header.parent_hash(), evm)?;
         self.apply_beacon_root_contract_call(header.parent_beacon_block_root(), evm)?;
@@ -64,7 +64,7 @@ where
     /// Apply post execution changes.
     pub fn apply_post_execution_changes(
         &mut self,
-        evm: &mut impl Evm<DB: DatabaseCommit>,
+        evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<Requests, BlockExecutionError> {
         let mut requests = Requests::default();
 
@@ -87,7 +87,7 @@ where
     pub fn apply_blockhashes_contract_call(
         &mut self,
         parent_block_hash: B256,
-        evm: &mut impl Evm<DB: DatabaseCommit>,
+        evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<(), BlockExecutionError> {
         let result_and_state =
             eip2935::transact_blockhashes_contract_call(&self.spec, parent_block_hash, evm)?;
@@ -109,7 +109,7 @@ where
     pub fn apply_beacon_root_contract_call(
         &mut self,
         parent_beacon_block_root: Option<B256>,
-        evm: &mut impl Evm<DB: DatabaseCommit>,
+        evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<(), BlockExecutionError> {
         let result_and_state =
             eip4788::transact_beacon_root_contract_call(&self.spec, parent_beacon_block_root, evm)?;
@@ -130,7 +130,7 @@ where
     /// Applies the post-block call to the EIP-7002 withdrawal request contract.
     pub fn apply_withdrawal_requests_contract_call(
         &mut self,
-        evm: &mut impl Evm<DB: DatabaseCommit>,
+        evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<Bytes, BlockExecutionError> {
         let result_and_state = eip7002::transact_withdrawal_requests_contract_call(evm)?;
 
@@ -150,7 +150,7 @@ where
     /// Applies the post-block call to the EIP-7251 consolidation requests contract.
     pub fn apply_consolidation_requests_contract_call(
         &mut self,
-        evm: &mut impl Evm<DB: DatabaseCommit>,
+        evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<Bytes, BlockExecutionError> {
         let result_and_state = eip7251::transact_consolidation_requests_contract_call(evm)?;
 

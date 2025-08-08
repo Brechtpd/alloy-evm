@@ -63,7 +63,7 @@ where
         tx: impl crate::IntoTxEnv<Self::Tx>,
     ) -> Result<revm::context::result::ExecutionResult<Self::HaltReason>, Self::Error>
     where
-        Self::DB: revm::DatabaseCommit,
+        Self::DB: revm::MultiChainDatabaseCommit,
     {
         either::for_both!(self, evm => evm.transact_commit(tx))
     }
