@@ -1,4 +1,4 @@
-use alloy_evm::Database;
+use alloy_evm::MultiDatabase;
 use alloy_op_hardforks::OpHardforks;
 use alloy_primitives::{address, b256, hex, Address, Bytes, B256};
 use revm::{database::State, database_interface::MultiChainDatabaseCommit, primitives::{ChainAddress, HashMap}, state::Bytecode};
@@ -23,7 +23,7 @@ pub(crate) fn ensure_create2_deployer<DB>(
     chain_id: u64,
 ) -> Result<(), DB::Error>
 where
-    DB: Database,
+    DB: MultiDatabase,
 {
     // If the canyon hardfork is active at the current timestamp, and it was not active at the
     // previous block timestamp (heuristically, block time is not perfectly constant at 2s), and the

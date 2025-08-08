@@ -5,7 +5,7 @@ use alloy_consensus::BlockHeader;
 use alloy_eips::eip4895::{Withdrawal, Withdrawals};
 use alloy_hardforks::EthereumHardforks;
 use alloy_primitives::{map::HashMap, Address};
-use crate::Database;
+use crate::MultiDatabase;
 use revm::{
     context::BlockEnv,
     database::State,
@@ -107,7 +107,7 @@ pub fn balance_increment_state<DB>(
     chain_id: u64,
 ) -> Result<EvmState, BlockExecutionError>
 where
-    DB: Database,
+    DB: MultiDatabase,
 {
     let mut load_account = |address: &Address| -> Result<(ChainAddress, Account), BlockExecutionError> {
         let chain_address = ChainAddress::new(chain_id, *address);

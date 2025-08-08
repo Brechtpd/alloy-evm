@@ -1,7 +1,7 @@
 //! Block execution abstraction.
 
 use crate::{
-    Database, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, RecoveredTx,
+    Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, MultiDatabase, RecoveredTx,
 };
 use alloc::{boxed::Box, vec::Vec};
 use alloy_eips::eip7685::Requests;
@@ -179,7 +179,7 @@ where
         Transaction = F::Transaction,
         Receipt = F::Receipt,
     >,
-    DB: Database + 'a,
+    DB: MultiDatabase + 'a,
     I: Inspector<<F::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>> + 'a,
 {
 }
@@ -187,7 +187,7 @@ where
 impl<'a, F, DB, I, T> BlockExecutorFor<'a, F, DB, I> for T
 where
     F: BlockExecutorFactory,
-    DB: Database + 'a,
+    DB: MultiDatabase + 'a,
     I: Inspector<<F::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>> + 'a,
     T: BlockExecutor<
         Evm = <F::EvmFactory as EvmFactory>::Evm<&'a mut State<DB>, I>,
@@ -236,6 +236,6 @@ pub trait BlockExecutorFactory: 'static {
         ctx: Self::ExecutionCtx<'a>,
     ) -> impl BlockExecutorFor<'a, Self, DB, I>
     where
-        DB: Database + 'a,
+        DB: MultiDatabase + 'a,
         I: Inspector<<Self::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>> + 'a;
 }

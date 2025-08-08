@@ -11,7 +11,7 @@ extern crate alloc;
 
 pub mod block;
 pub mod evm;
-pub use evm::{Database, Evm, EvmFactory};
+pub use evm::{Evm, EvmFactory, MultiDatabase};
 pub mod eth;
 pub use eth::{EthEvm, EthEvmFactory};
 pub mod env;

@@ -12,7 +12,7 @@ use alloy_evm::{
         StateChangePostBlockSource, StateChangeSource, SystemCaller,
     },
     eth::receipt_builder::ReceiptBuilderCtx,
-    Database, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded,
+    Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, MultiDatabase,
 };
 use alloy_op_hardforks::{OpChainHardforks, OpHardforks};
 use alloy_primitives::{Bytes, B256};
@@ -88,7 +88,7 @@ where
 
 impl<'db, DB, E, R, Spec> BlockExecutor for OpBlockExecutor<E, R, Spec>
 where
-    DB: Database + 'db,
+    DB: MultiDatabase + 'db,
     E: Evm<
         DB = &'db mut State<DB>,
         Tx: FromRecoveredTx<R::Transaction> + FromTxWithEncoded<R::Transaction>,
@@ -317,7 +317,7 @@ where
         ctx: Self::ExecutionCtx<'a>,
     ) -> impl BlockExecutorFor<'a, Self, DB, I>
     where
-        DB: Database + 'a,
+        DB: MultiDatabase + 'a,
         I: Inspector<EvmF::Context<&'a mut State<DB>>> + 'a,
     {
         OpBlockExecutor::new(evm, ctx, &self.spec, &self.receipt_builder)

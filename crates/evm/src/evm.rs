@@ -15,8 +15,8 @@ use revm::{
 };
 
 /// Helper trait to bound [`MultiChainDatabase::Error`] with common requirements.
-pub trait Database: MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
-impl<T> Database for T where T: MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
+pub trait MultiDatabase: MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
+impl<T> MultiDatabase for T where T: MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
 
 /// An instance of an ethereum virtual machine.
 ///
@@ -154,7 +154,7 @@ pub trait Evm {
 /// A type responsible for creating instances of an ethereum virtual machine given a certain input.
 pub trait EvmFactory {
     /// The EVM type that this factory creates.
-    type Evm<DB: Database, I: Inspector<Self::Context<DB>>>: Evm<
+    type Evm<DB: MultiDatabase, I: Inspector<Self::Context<DB>>>: Evm<
         DB = DB,
         Tx = Self::Tx,
         HaltReason = Self::HaltReason,
@@ -165,7 +165,7 @@ pub trait EvmFactory {
     >;
 
     /// The EVM context for inspectors
-    type Context<DB: Database>: ContextTr<Db = DB, Journal: JournalExt>;
+    type Context<DB: MultiDatabase>: ContextTr<Db = DB, Journal: JournalExt>;
     /// Transaction environment.
     type Tx: IntoTxEnv<Self::Tx>;
     /// EVM error. See [`Evm::Error`].
@@ -178,7 +178,7 @@ pub trait EvmFactory {
     type Precompiles;
 
     /// Creates a new instance of an EVM.
-    fn create_evm<DB: Database>(
+    fn create_evm<DB: MultiDatabase>(
         &self,
         db: DB,
         evm_env: EvmEnv<Self::Spec>,
@@ -188,7 +188,7 @@ pub trait EvmFactory {
     ///
     /// Note: It is expected that the [`Inspector`] is usually provided as `&mut Inspector` so that
     /// it remains owned by the call site when [`Evm::transact`] is invoked.
-    fn create_evm_with_inspector<DB: Database, I: Inspector<Self::Context<DB>>>(
+    fn create_evm_with_inspector<DB: MultiDatabase, I: Inspector<Self::Context<DB>>>(
         &self,
         db: DB,
         input: EvmEnv<Self::Spec>,

@@ -15,7 +15,7 @@ pub use block::{OpBlockExecutionCtx, OpBlockExecutor, OpBlockExecutorFactory};
 // Stub implementations since Op code won't be used but needs to compile
 // The real implementation would require MultiChainBlockEnv to implement Block trait
 
-use alloy_evm::{Database, Evm, EvmEnv, EvmFactory};
+use alloy_evm::{Evm, EvmEnv, EvmFactory, MultiDatabase};
 use alloy_primitives::{Address, Bytes};
 use op_revm::{OpHaltReason, OpSpecId, OpTransactionError};
 use revm::{
@@ -32,7 +32,7 @@ pub struct OpEvm<DB, I> {
     _inspector: core::marker::PhantomData<I>,
 }
 
-impl<DB: Database, I> Evm for OpEvm<DB, I> {
+impl<DB: MultiDatabase, I> Evm for OpEvm<DB, I> {
     type DB = DB;
     type Tx = TxEnv;
     type Error = EVMError<DB::Error, OpTransactionError>;
@@ -95,16 +95,16 @@ impl<DB: Database, I> Evm for OpEvm<DB, I> {
 pub struct OpEvmFactory;
 
 impl EvmFactory for OpEvmFactory {
-    type Evm<DB: Database, I: Inspector<Self::Context<DB>>> = OpEvm<DB, I>;
+    type Evm<DB: MultiDatabase, I: Inspector<Self::Context<DB>>> = OpEvm<DB, I>;
     // Use a simple context type that satisfies bounds
-    type Context<DB: Database> = revm::Context<BlockEnv, TxEnv, revm::context::CfgEnv<OpSpecId>, DB>;
+    type Context<DB: MultiDatabase> = revm::Context<BlockEnv, TxEnv, revm::context::CfgEnv<OpSpecId>, DB>;
     type Tx = TxEnv;
     type Error<DBError: core::error::Error + Send + Sync + 'static> = EVMError<DBError, OpTransactionError>;
     type HaltReason = OpHaltReason;
     type Spec = OpSpecId;
     type Precompiles = ();
 
-    fn create_evm<DB: Database>(
+    fn create_evm<DB: MultiDatabase>(
         &self,
         _db: DB,
         _input: EvmEnv<OpSpecId>,
@@ -115,7 +115,7 @@ impl EvmFactory for OpEvmFactory {
         }
     }
 
-    fn create_evm_with_inspector<DB: Database, I: Inspector<Self::Context<DB>>>(
+    fn create_evm_with_inspector<DB: MultiDatabase, I: Inspector<Self::Context<DB>>>(
         &self,
         _db: DB,
         _input: EvmEnv<OpSpecId>,

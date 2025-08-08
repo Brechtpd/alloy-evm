@@ -13,7 +13,7 @@ use crate::{
         BlockExecutorFor, BlockValidationError, CommitChanges, ExecutableTx, OnStateHook,
         StateChangePostBlockSource, StateChangeSource, SystemCaller,
     },
-    Database, Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded,
+    Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, MultiDatabase,
 };
 use alloc::{borrow::Cow, boxed::Box, vec::Vec};
 use alloy_consensus::{Header, Transaction, TxReceipt};
@@ -81,7 +81,7 @@ where
 
 impl<'db, DB, E, Spec, R> BlockExecutor for EthBlockExecutor<'_, E, Spec, R>
 where
-    DB: Database + 'db,
+    DB: MultiDatabase + 'db,
     E: Evm<
         DB = &'db mut State<DB>,
         Tx: FromRecoveredTx<R::Transaction> + FromTxWithEncoded<R::Transaction>,
@@ -297,7 +297,7 @@ where
         ctx: Self::ExecutionCtx<'a>,
     ) -> impl BlockExecutorFor<'a, Self, DB, I>
     where
-        DB: Database + 'a,
+        DB: MultiDatabase + 'a,
         I: Inspector<EvmF::Context<&'a mut State<DB>>> + 'a,
     {
         EthBlockExecutor::new(evm, ctx, &self.spec, &self.receipt_builder)

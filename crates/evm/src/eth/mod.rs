@@ -1,6 +1,6 @@
 //! Ethereum EVM implementation.
 
-use crate::{env::EvmEnv, evm::EvmFactory, precompiles::PrecompilesMap, Database, Evm};
+use crate::{env::EvmEnv, evm::EvmFactory, precompiles::PrecompilesMap, Evm, MultiDatabase};
 use alloc::vec::Vec;
 use alloy_primitives::{Address, Bytes, TxKind, U256};
 use core::{
@@ -36,7 +36,7 @@ pub type EthEvmContext<DB> = Context<BlockEnv, TxEnv, CfgEnv, DB>;
 /// support. [`Inspector`] support is configurable at runtime because it's part of the underlying
 /// [`RevmEvm`] type.
 #[expect(missing_debug_implementations)]
-pub struct EthEvm<DB: Database, I, PRECOMPILE = EthPrecompiles> {
+pub struct EthEvm<DB: MultiDatabase, I, PRECOMPILE = EthPrecompiles> {
     inner: RevmEvm<
         EthEvmContext<DB>,
         I,
@@ -46,7 +46,7 @@ pub struct EthEvm<DB: Database, I, PRECOMPILE = EthPrecompiles> {
     inspect: bool,
 }
 
-impl<DB: Database, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
+impl<DB: MultiDatabase, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
     /// Creates a new Ethereum EVM instance.
     ///
     /// The `inspect` argument determines whether the configured [`Inspector`] of the given
@@ -82,7 +82,7 @@ impl<DB: Database, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
     }
 }
 
-impl<DB: Database, I, PRECOMPILE> Deref for EthEvm<DB, I, PRECOMPILE> {
+impl<DB: MultiDatabase, I, PRECOMPILE> Deref for EthEvm<DB, I, PRECOMPILE> {
     type Target = EthEvmContext<DB>;
 
     #[inline]
@@ -91,7 +91,7 @@ impl<DB: Database, I, PRECOMPILE> Deref for EthEvm<DB, I, PRECOMPILE> {
     }
 }
 
-impl<DB: Database, I, PRECOMPILE> DerefMut for EthEvm<DB, I, PRECOMPILE> {
+impl<DB: MultiDatabase, I, PRECOMPILE> DerefMut for EthEvm<DB, I, PRECOMPILE> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.ctx_mut()
@@ -100,7 +100,7 @@ impl<DB: Database, I, PRECOMPILE> DerefMut for EthEvm<DB, I, PRECOMPILE> {
 
 impl<DB, I, PRECOMPILE> Evm for EthEvm<DB, I, PRECOMPILE>
 where
-    DB: Database,
+    DB: MultiDatabase,
     I: Inspector<EthEvmContext<DB>>,
     PRECOMPILE: PrecompileProvider<EthEvmContext<DB>, Output = InterpreterResult>,
 {
@@ -231,15 +231,15 @@ where
 pub struct EthEvmFactory;
 
 impl EvmFactory for EthEvmFactory {
-    type Evm<DB: Database, I: Inspector<EthEvmContext<DB>>> = EthEvm<DB, I, Self::Precompiles>;
-    type Context<DB: Database> = Context<BlockEnv, TxEnv, CfgEnv, DB>;
+    type Evm<DB: MultiDatabase, I: Inspector<EthEvmContext<DB>>> = EthEvm<DB, I, Self::Precompiles>;
+    type Context<DB: MultiDatabase> = Context<BlockEnv, TxEnv, CfgEnv, DB>;
     type Tx = TxEnv;
     type Error<DBError: core::error::Error + Send + Sync + 'static> = EVMError<DBError>;
     type HaltReason = HaltReason;
     type Spec = SpecId;
     type Precompiles = PrecompilesMap;
 
-    fn create_evm<DB: Database>(&self, db: DB, input: EvmEnv) -> Self::Evm<DB, NoOpInspector> {
+    fn create_evm<DB: MultiDatabase>(&self, db: DB, input: EvmEnv) -> Self::Evm<DB, NoOpInspector> {
         let spec_id = input.cfg_env.spec;
         EthEvm {
             inner: Context::mainnet()
@@ -254,7 +254,7 @@ impl EvmFactory for EthEvmFactory {
         }
     }
 
-    fn create_evm_with_inspector<DB: Database, I: Inspector<Self::Context<DB>>>(
+    fn create_evm_with_inspector<DB: MultiDatabase, I: Inspector<Self::Context<DB>>>(
         &self,
         db: DB,
         input: EvmEnv,
