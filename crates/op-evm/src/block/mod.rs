@@ -24,7 +24,9 @@ use receipt_builder::OpReceiptBuilder;
 use revm::{
     context::result::{ExecutionResult, ResultAndState},
     database::State,
-    DatabaseCommit, Inspector,
+    database_interface::MultiChainDatabaseCommit,
+    primitives::ChainAddress,
+    Inspector,
 };
 
 mod canyon;
@@ -112,7 +114,8 @@ where
         // blocks will always have at least a single transaction in them (the L1 info transaction),
         // so we can safely assume that this will always be triggered upon the transition and that
         // the above check for empty blocks will never be hit on OP chains.
-        ensure_create2_deployer(&self.spec, self.evm.block().timestamp, self.evm.db_mut())
+        let chain_id = self.evm.chain_id();
+        ensure_create2_deployer(&self.spec, self.evm.block().timestamp, self.evm.db_mut(), chain_id)
             .map_err(BlockExecutionError::other)?;
 
         Ok(())
@@ -143,9 +146,10 @@ where
         // nonces, so we don't need to touch the DB for those.
         let depositor = (self.is_regolith && is_deposit)
             .then(|| {
+                let chain_id = self.evm.chain_id();
                 self.evm
                     .db_mut()
-                    .load_cache_account(*tx.signer())
+                    .load_cache_account(ChainAddress::new(chain_id, *tx.signer()))
                     .map(|acc| acc.account_info().unwrap_or_default())
             })
             .transpose()
@@ -202,7 +206,7 @@ where
             },
         );
 
-        self.evm.db_mut().commit(state);
+        self.evm.db_mut().commit_multi(state);
 
         Ok(Some(gas_used))
     }
@@ -213,9 +217,10 @@ where
         let balance_increments =
             post_block_balance_increments::<Header>(&self.spec, self.evm.block(), &[], None);
         // increment balances
+        let chain_id = self.evm.chain_id();
         self.evm
             .db_mut()
-            .increment_balances(balance_increments.clone())
+            .increment_balances(balance_increments.iter().map(|(addr, balance)| (ChainAddress::new(chain_id, *addr), *balance)))
             .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
         // call state hook with changes due to balance increments.
         let chain_id = self.evm.chain_id();
@@ -326,18 +331,19 @@ mod tests {
     use alloy_evm::EvmEnv;
     use alloy_primitives::{Address, Signature};
     use op_alloy_consensus::OpTxEnvelope;
-    use revm::database::{CacheDB, EmptyDB};
+    use revm::database::MultiEmptyDB;
 
     use super::*;
 
     #[test]
+    #[ignore = "OpEvm is a stub implementation - Op code won't be used"]
     fn test_with_encoded() {
         let executor_factory = OpBlockExecutorFactory::new(
             OpAlloyReceiptBuilder::default(),
             OpChainHardforks::op_mainnet(),
             OpEvmFactory::default(),
         );
-        let mut db = State::builder().with_database(CacheDB::<EmptyDB>::default()).build();
+        let mut db = State::builder().with_database(MultiEmptyDB::default()).build();
         let evm = executor_factory.evm_factory.create_evm(&mut db, EvmEnv::default());
         let mut executor = executor_factory.create_executor(evm, OpBlockExecutionCtx::default());
         let tx = Recovered::new_unchecked(

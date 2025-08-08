@@ -279,7 +279,7 @@ impl EvmFactory for EthEvmFactory {
 mod tests {
     use super::*;
     use alloy_primitives::address;
-    use revm::{database_interface::EmptyDB, primitives::hardfork::SpecId};
+    use revm::{database::MultiEmptyDB, primitives::hardfork::SpecId};
 
     #[test]
     fn test_precompiles_with_correct_spec() {
@@ -308,7 +308,7 @@ mod tests {
 
             let early_env = EvmEnv { block_env: BlockEnv::default(), cfg_env: early_cfg_env };
             let factory = EthEvmFactory;
-            let mut early_evm = factory.create_evm(EmptyDB::default(), early_env);
+            let mut early_evm = factory.create_evm(MultiEmptyDB::default(), early_env);
 
             // precompile should NOT be available in early spec
             assert!(
@@ -321,7 +321,7 @@ mod tests {
             later_cfg_env.chain_id = 1;
 
             let later_env = EvmEnv { block_env: BlockEnv::default(), cfg_env: later_cfg_env };
-            let mut later_evm = factory.create_evm(EmptyDB::default(), later_env);
+            let mut later_evm = factory.create_evm(MultiEmptyDB::default(), later_env);
 
             // precompile should be available in later spec
             assert!(

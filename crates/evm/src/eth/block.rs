@@ -21,8 +21,8 @@ use alloy_eips::{eip4895::Withdrawals, eip7685::Requests, Encodable2718};
 use alloy_hardforks::EthereumHardfork;
 use alloy_primitives::{Log, B256};
 use revm::{
-    context::result::ExecutionResult, context_interface::result::ResultAndState, 
-    database::State, database_interface::MultiChainDatabaseCommit, 
+    context::result::ExecutionResult, context_interface::result::ResultAndState,
+    database::State, database_interface::MultiChainDatabaseCommit,
     primitives::ChainAddress, Inspector,
 };
 
