@@ -11,7 +11,7 @@ use revm::{
     },
     database_interface::{MultiChainDatabase, MultiChainDatabaseCommit},
     inspector::{JournalExt, NoOpInspector},
-    DatabaseCommit, Inspector,
+    Inspector,
 };
 
 /// Helper trait to bound [`MultiChainDatabase::Error`] with common requirements.
