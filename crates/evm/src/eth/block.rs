@@ -21,8 +21,9 @@ use alloy_eips::{eip4895::Withdrawals, eip7685::Requests, Encodable2718};
 use alloy_hardforks::EthereumHardfork;
 use alloy_primitives::{Log, B256};
 use revm::{
-    context::result::ExecutionResult, context_interface::result::ResultAndState, database::State,
-    MultiChainDatabaseCommit, Inspector,
+    context::result::ExecutionResult, context_interface::result::ResultAndState, 
+    database::State, database_interface::MultiChainDatabaseCommit, 
+    primitives::ChainAddress, Inspector,
 };
 
 /// Context for Ethereum block execution.
@@ -149,7 +150,7 @@ where
         }));
 
         // Commit the state changes.
-        self.evm.db_mut().commit(state);
+        self.evm.db_mut().commit_multi(state);
 
         Ok(Some(gas_used))
     }
@@ -174,6 +175,7 @@ where
             Requests::default()
         };
 
+        let chain_id = self.evm.chain_id();
         let mut balance_increments = post_block_balance_increments(
             &self.spec,
             self.evm.block(),
@@ -191,7 +193,7 @@ where
             let drained_balance: u128 = self
                 .evm
                 .db_mut()
-                .drain_balances(dao_fork::DAO_HARDFORK_ACCOUNTS)
+                .drain_balances(dao_fork::DAO_HARDFORK_ACCOUNTS.iter().map(|addr| ChainAddress::new(chain_id, *addr)))
                 .map_err(|_| BlockValidationError::IncrementBalanceFailed)?
                 .into_iter()
                 .sum();
@@ -203,11 +205,10 @@ where
         // increment balances
         self.evm
             .db_mut()
-            .increment_balances(balance_increments.clone())
+            .increment_balances(balance_increments.iter().map(|(addr, balance)| (ChainAddress::new(chain_id, *addr), *balance)))
             .map_err(|_| BlockValidationError::IncrementBalanceFailed)?;
 
         // call state hook with changes due to balance increments.
-        let chain_id = self.evm.chain_id();
         self.system_caller.try_on_state_with(|| {
             balance_increment_state(&balance_increments, self.evm.db_mut(), chain_id).map(|state| {
                 (

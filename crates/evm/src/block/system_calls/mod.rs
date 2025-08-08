@@ -11,7 +11,7 @@ use alloy_eips::{
 };
 use alloy_hardforks::EthereumHardforks;
 use alloy_primitives::{Bytes, B256};
-use revm::{state::EvmState, MultiChainDatabaseCommit};
+use revm::{database_interface::MultiChainDatabaseCommit, state::EvmState};
 
 use super::{StateChangePostBlockSource, StateChangePreBlockSource, StateChangeSource};
 
@@ -99,7 +99,7 @@ where
                     &res.state,
                 );
             }
-            evm.db_mut().commit(res.state);
+            evm.db_mut().commit_multi(res.state);
         }
 
         Ok(())
@@ -121,7 +121,7 @@ where
                     &res.state,
                 );
             }
-            evm.db_mut().commit(res.state);
+            evm.db_mut().commit_multi(res.state);
         }
 
         Ok(())
@@ -142,7 +142,7 @@ where
                 &result_and_state.state,
             );
         }
-        evm.db_mut().commit(result_and_state.state);
+        evm.db_mut().commit_multi(result_and_state.state);
 
         eip7002::post_commit(result_and_state.result)
     }
@@ -162,7 +162,7 @@ where
                 &result_and_state.state,
             );
         }
-        evm.db_mut().commit(result_and_state.state);
+        evm.db_mut().commit_multi(result_and_state.state);
 
         eip7251::post_commit(result_and_state.result)
     }

@@ -9,13 +9,14 @@ use revm::{
         result::{HaltReasonTr, ResultAndState},
         ContextTr,
     },
+    database_interface::{MultiChainDatabase, MultiChainDatabaseCommit},
     inspector::{JournalExt, NoOpInspector},
-    DatabaseCommit, Inspector, MultiChainDatabase, MultiChainDatabaseCommit,
+    DatabaseCommit, Inspector,
 };
 
-/// Helper trait to bound [`revm::MultiChainDatabase::Error`] with common requirements.
-pub trait Database: revm::MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
-impl<T> Database for T where T: revm::MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
+/// Helper trait to bound [`MultiChainDatabase::Error`] with common requirements.
+pub trait Database: MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
+impl<T> Database for T where T: MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
 
 /// An instance of an ethereum virtual machine.
 ///
