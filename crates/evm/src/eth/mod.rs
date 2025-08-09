@@ -2,13 +2,13 @@
 
 use crate::{env::EvmEnv, evm::EvmFactory, precompiles::PrecompilesMap, Evm, MultiDatabase};
 use alloc::vec::Vec;
-use alloy_primitives::{Address, Bytes, TxKind, U256};
+use alloy_primitives::{Address, Bytes, U256};
 use core::{
     fmt::Debug,
     ops::{Deref, DerefMut},
 };
 use revm::{
-    context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
+    context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv, multi_chain_tx::TxKind},
     context_interface::result::{EVMError, HaltReason, ResultAndState},
     primitives::ChainAddress,
     handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
@@ -113,11 +113,19 @@ where
     type Inspector = I;
 
     fn block(&self) -> &BlockEnv {
-        &self.block
+        // The Context.block is HashMap<u64, BlockEnv>
+        // We need to get the BlockEnv for the current chain_id
+        let chain_id = self.chain_id();
+        
+        self.inner.ctx.block.get(&chain_id)
+            .or_else(|| self.inner.ctx.block.get(&0))  // fallback to chain 0
+            .unwrap_or_else(|| {
+                panic!("No block environment found for chain {chain_id} or fallback chain 0")
+            })
     }
 
     fn chain_id(&self) -> u64 {
-        self.cfg.chain_id
+        self.inner.ctx.cfg.chain_id
     }
 
     fn transact_raw(&mut self, tx: Self::Tx) -> Result<ResultAndState, Self::Error> {
@@ -138,7 +146,7 @@ where
         let chain_id = self.chain_id();
         let tx = TxEnv {
             caller: ChainAddress::new(chain_id, caller),
-            kind: TxKind::Call(contract),
+            kind: TxKind::Call(ChainAddress::new(chain_id, contract)),
             // Explicitly set nonce to 0 so revm does not do any nonce checks
             nonce: 0,
             gas_limit: 30_000_000,
@@ -165,21 +173,37 @@ where
         let mut basefee = 0;
         let mut disable_nonce_check = true;
 
-        // ensure the block gas limit is >= the tx
-        core::mem::swap(&mut self.block.gas_limit, &mut gas_limit);
-        // disable the base fee check for this call by setting the base fee to zero
-        core::mem::swap(&mut self.block.basefee, &mut basefee);
-        // disable the nonce check
-        core::mem::swap(&mut self.cfg.disable_nonce_check, &mut disable_nonce_check);
+        // Get the BlockEnv from HashMap<u64, BlockEnv> for the current chain ID
+        let block_env = if let Some(env) = self.inner.ctx.block.get_mut(&chain_id) {
+            env
+        } else {
+            self.inner.ctx.block.get_mut(&0)
+                .expect("No block environment found for chain ID or fallback chain 0")
+        };
 
-        let mut res = self.transact(tx);
+        // ensure the block gas limit is >= the tx
+        core::mem::swap(&mut block_env.gas_limit, &mut gas_limit);
+        // disable the base fee check for this call by setting the base fee to zero
+        core::mem::swap(&mut block_env.basefee, &mut basefee);
+        // disable the nonce check
+        core::mem::swap(&mut self.inner.ctx.cfg.disable_nonce_check, &mut disable_nonce_check);
+
+        let mut res = self.transact_raw(tx);
+
+        // Get the block again for swapping back
+        let block_env = if let Some(env) = self.inner.ctx.block.get_mut(&chain_id) {
+            env
+        } else {
+            self.inner.ctx.block.get_mut(&0)
+                .expect("No block environment found for chain ID or fallback chain 0")
+        };
 
         // swap back to the previous gas limit
-        core::mem::swap(&mut self.block.gas_limit, &mut gas_limit);
+        core::mem::swap(&mut block_env.gas_limit, &mut gas_limit);
         // swap back to the previous base fee
-        core::mem::swap(&mut self.block.basefee, &mut basefee);
+        core::mem::swap(&mut block_env.basefee, &mut basefee);
         // swap back to the previous nonce check flag
-        core::mem::swap(&mut self.cfg.disable_nonce_check, &mut disable_nonce_check);
+        core::mem::swap(&mut self.inner.ctx.cfg.disable_nonce_check, &mut disable_nonce_check);
 
         // NOTE: We assume that only the contract storage is modified. Revm currently marks the
         // caller and block beneficiary accounts as "touched" when we do the above transact calls,
@@ -195,12 +219,19 @@ where
     }
 
     fn db_mut(&mut self) -> &mut Self::DB {
-        &mut self.journaled_state.database
+        &mut self.inner.ctx.journaled_state.database
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
-        let Context { block: block_env, cfg: cfg_env, journaled_state, .. } = self.inner.ctx;
-
+        let Context { block: block_map, cfg: cfg_env, journaled_state, .. } = self.inner.ctx;
+        
+        // Extract the BlockEnv for the current chain from the HashMap
+        let chain_id = cfg_env.chain_id;
+        let block_env = block_map.get(&chain_id)
+            .or_else(|| block_map.get(&0))
+            .cloned()
+            .unwrap_or_default();
+        
         (journaled_state.database, EvmEnv { block_env, cfg_env })
     }
 
@@ -241,9 +272,14 @@ impl EvmFactory for EthEvmFactory {
 
     fn create_evm<DB: MultiDatabase>(&self, db: DB, input: EvmEnv) -> Self::Evm<DB, NoOpInspector> {
         let spec_id = input.cfg_env.spec;
+        // Create a HashMap with the block environment for the current chain
+        let chain_id = input.cfg_env.chain_id;
+        let mut block_map = std::collections::HashMap::new();
+        block_map.insert(chain_id, input.block_env);
+        
         EthEvm {
             inner: Context::mainnet()
-                .with_block(input.block_env)
+                .with_block(block_map)
                 .with_cfg(input.cfg_env)
                 .with_db(db)
                 .build_mainnet_with_inspector(NoOpInspector {})
@@ -261,9 +297,14 @@ impl EvmFactory for EthEvmFactory {
         inspector: I,
     ) -> Self::Evm<DB, I> {
         let spec_id = input.cfg_env.spec;
+        // Create a HashMap with the block environment for the current chain
+        let chain_id = input.cfg_env.chain_id;
+        let mut block_map = std::collections::HashMap::new();
+        block_map.insert(chain_id, input.block_env);
+        
         EthEvm {
             inner: Context::mainnet()
-                .with_block(input.block_env)
+                .with_block(block_map)
                 .with_cfg(input.cfg_env)
                 .with_db(db)
                 .build_mainnet_with_inspector(inspector)

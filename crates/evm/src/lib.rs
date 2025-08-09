@@ -24,7 +24,8 @@ pub mod precompiles;
 
 mod either;
 
-// re-export revm and op-revm
-#[cfg(feature = "op")]
-pub use op_revm;
+// re-export revm
+// op-revm disabled due to incompatibility with HashMap<u64, BlockEnv>
+// #[cfg(feature = "op")]
+// pub use op_revm;
 pub use revm;

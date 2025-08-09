@@ -9,8 +9,8 @@ use alloy_eips::{
     eip7702::{RecoveredAuthority, RecoveredAuthorization},
     Typed2718,
 };
-use alloy_primitives::{Address, Bytes, TxKind};
-use revm::{context::TxEnv, context_interface::either::Either, primitives::ChainAddress};
+use alloy_primitives::{Address, Bytes, TxKind as PrimitiveTxKind};
+use revm::{context::{TxEnv, multi_chain_tx::TxKind}, context_interface::either::Either, primitives::ChainAddress};
 
 /// Trait marking types that can be converted into a transaction environment.
 pub trait IntoTxEnv<TxEnv> {
@@ -24,15 +24,16 @@ impl IntoTxEnv<Self> for TxEnv {
     }
 }
 
-#[cfg(feature = "op")]
-impl<T> IntoTxEnv<Self> for op_revm::OpTransaction<T>
-where
-    T: revm::context_interface::transaction::Transaction,
-{
-    fn into_tx_env(self) -> Self {
-        self
-    }
-}
+// op-revm disabled due to incompatibility with HashMap<u64, BlockEnv>
+// #[cfg(feature = "op")]
+// impl<T> IntoTxEnv<Self> for op_revm::OpTransaction<T>
+// where
+//     T: revm::context_interface::transaction::Transaction,
+// {
+//     fn into_tx_env(self) -> Self {
+//         self
+//     }
+// }
 
 /// Helper user-facing trait to allow implementing [`IntoTxEnv`] on instances of [`Recovered`].
 pub trait FromRecoveredTx<Tx> {
@@ -70,7 +71,10 @@ impl FromRecoveredTx<TxLegacy> for TxEnv {
             caller: ChainAddress::new(resolved_chain_id, caller),
             gas_limit: *gas_limit,
             gas_price: *gas_price,
-            kind: *to,
+            kind: match *to {
+                PrimitiveTxKind::Call(addr) => TxKind::Call(ChainAddress::new(resolved_chain_id, addr)),
+                PrimitiveTxKind::Create => TxKind::Create,
+            },
             value: *value,
             data: input.clone(),
             nonce: *nonce,
@@ -95,7 +99,10 @@ impl FromRecoveredTx<TxEip2930> for TxEnv {
             caller: ChainAddress::new(*chain_id, caller),
             gas_limit: *gas_limit,
             gas_price: *gas_price,
-            kind: *to,
+            kind: match *to {
+                PrimitiveTxKind::Call(addr) => TxKind::Call(ChainAddress::new(*chain_id, addr)),
+                PrimitiveTxKind::Create => TxKind::Create,
+            },
             value: *value,
             data: input.clone(),
             chain_id: Some(*chain_id),
@@ -131,7 +138,10 @@ impl FromRecoveredTx<TxEip1559> for TxEnv {
             caller: ChainAddress::new(*chain_id, caller),
             gas_limit: *gas_limit,
             gas_price: *max_fee_per_gas,
-            kind: *to,
+            kind: match *to {
+                PrimitiveTxKind::Call(addr) => TxKind::Call(ChainAddress::new(*chain_id, addr)),
+                PrimitiveTxKind::Create => TxKind::Create,
+            },
             value: *value,
             data: input.clone(),
             nonce: *nonce,
@@ -170,7 +180,7 @@ impl FromRecoveredTx<TxEip4844> for TxEnv {
             caller: ChainAddress::new(*chain_id, caller),
             gas_limit: *gas_limit,
             gas_price: *max_fee_per_gas,
-            kind: TxKind::Call(*to),
+            kind: TxKind::Call(ChainAddress::new(*chain_id, *to)),
             value: *value,
             data: input.clone(),
             nonce: *nonce,
@@ -210,7 +220,7 @@ impl FromRecoveredTx<TxEip7702> for TxEnv {
             caller: ChainAddress::new(*chain_id, caller),
             gas_limit: *gas_limit,
             gas_price: *max_fee_per_gas,
-            kind: TxKind::Call(*to),
+            kind: TxKind::Call(ChainAddress::new(*chain_id, *to)),
             value: *value,
             data: input.clone(),
             nonce: *nonce,
@@ -359,7 +369,25 @@ mod op {
     use alloy_eips::{Encodable2718, Typed2718};
     use alloy_primitives::{Address, Bytes};
     use op_alloy_consensus::{OpTxEnvelope, TxDeposit};
-    use op_revm::{transaction::deposit::DepositTransactionParts, OpTransaction};
+    // op-revm disabled - stub implementations below
+    // use op_revm::{transaction::deposit::DepositTransactionParts, OpTransaction};
+    
+    // Stub for DepositTransactionParts
+    #[allow(dead_code)]
+    #[derive(Default)]
+    struct DepositTransactionParts {
+        source_hash: alloy_primitives::B256,
+        mint: Option<u128>,
+        is_system_transaction: bool,
+    }
+    
+    // Stub for OpTransaction
+    #[allow(dead_code)]
+    struct OpTransaction<T> {
+        base: T,
+        enveloped_tx: Option<Bytes>,
+        deposit: DepositTransactionParts,
+    }
     use revm::context::TxEnv;
 
     impl FromRecoveredTx<OpTxEnvelope> for TxEnv {
@@ -388,9 +416,12 @@ mod op {
             } = tx;
             Self {
                 tx_type: tx.ty(),
-                caller: ChainAddress(1, caller),
+                caller: ChainAddress::new(1, caller),
                 gas_limit: *gas_limit,
-                kind: *to,
+                kind: match *to {
+                    alloy_primitives::TxKind::Call(addr) => TxKind::Call(ChainAddress::new(1, addr)),
+                    alloy_primitives::TxKind::Create => TxKind::Create,
+                },
                 value: *value,
                 data: input.clone(),
                 ..Default::default()
@@ -404,6 +435,8 @@ mod op {
         }
     }
 
+    // Stubbed implementation - op-revm disabled
+    #[allow(dead_code)]
     impl FromTxWithEncoded<OpTxEnvelope> for OpTransaction<TxEnv> {
         fn from_encoded_tx(tx: &OpTxEnvelope, caller: Address, encoded: Bytes) -> Self {
             let base = TxEnv::from_recovered_tx(tx, caller);
@@ -422,6 +455,8 @@ mod op {
         }
     }
 
+    // Stubbed implementation - op-revm disabled
+    #[allow(dead_code)]
     impl FromRecoveredTx<OpTxEnvelope> for OpTransaction<TxEnv> {
         fn from_recovered_tx(tx: &OpTxEnvelope, sender: Address) -> Self {
             let encoded = tx.encoded_2718();

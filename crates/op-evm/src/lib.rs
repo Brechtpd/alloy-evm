@@ -15,15 +15,40 @@ pub use block::{OpBlockExecutionCtx, OpBlockExecutor, OpBlockExecutorFactory};
 // Stub implementations since Op code won't be used but needs to compile
 // The real implementation would require MultiChainBlockEnv to implement Block trait
 
-use alloy_evm::{Evm, EvmEnv, EvmFactory, MultiDatabase};
+use alloy_evm::{Evm, EvmEnv, EvmFactory, MultiDatabase, InvalidTxError};
 use alloy_primitives::{Address, Bytes};
-use op_revm::{OpHaltReason, OpSpecId, OpTransactionError};
 use revm::{
     context::{BlockEnv, TxEnv},
-    context_interface::result::{EVMError, ResultAndState},
+    context_interface::result::{EVMError, ResultAndState, HaltReason},
     inspector::NoOpInspector,
     Inspector,
+    primitives::hardfork::SpecId,
 };
+
+// Stub types to avoid op-revm compilation issues
+/// Stub OpHaltReason - uses regular HaltReason
+pub type OpHaltReason = HaltReason;
+
+/// Stub OpSpecId - uses regular SpecId  
+pub type OpSpecId = SpecId;
+
+/// Stub OpTransactionError
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpTransactionError;
+
+impl core::fmt::Display for OpTransactionError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "OpTransactionError stub")
+    }
+}
+
+impl core::error::Error for OpTransactionError {}
+
+impl InvalidTxError for OpTransactionError {
+    fn is_nonce_too_low(&self) -> bool {
+        false // Stub implementation
+    }
+}
 
 /// Stub OP EVM implementation
 #[derive(Debug)]

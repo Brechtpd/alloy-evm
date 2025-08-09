@@ -62,9 +62,10 @@ where
     }
 }
 
-#[cfg(feature = "op")]
-impl InvalidTxError for op_revm::OpTransactionError {
-    fn is_nonce_too_low(&self) -> bool {
-        matches!(self, Self::Base(tx) if tx.is_nonce_too_low())
-    }
-}
+// op-revm disabled due to incompatibility with HashMap<u64, BlockEnv>
+// #[cfg(feature = "op")]
+// impl InvalidTxError for op_revm::OpTransactionError {
+//     fn is_nonce_too_low(&self) -> bool {
+//         matches!(self, Self::Base(tx) if tx.is_nonce_too_low())
+//     }
+// }
