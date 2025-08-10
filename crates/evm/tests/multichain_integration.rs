@@ -2,7 +2,7 @@ use alloy_evm::{Evm, EvmEnv, EvmFactory, eth::EthEvmFactory};
 use alloy_primitives::{address, Address, U256};
 use revm::{
     context::{BlockEnv, CfgEnv, TxEnv},
-    database::MultiEmptyDB,
+    database::{MultiEmptyDB, EmptyDB},
     primitives::{hardfork::SpecId, ChainAddress},
     context::multi_chain_tx::TxKind,
 };
@@ -21,7 +21,9 @@ fn test_multichain_support() {
     
     let env = EvmEnv { block_env, cfg_env };
     let factory = EthEvmFactory::default();
-    let mut evm = factory.create_evm(MultiEmptyDB::default(), env);
+    let mut multi_db = MultiEmptyDB::new();
+    multi_db.add_chain(1, EmptyDB::default());
+    let mut evm = factory.create_evm(multi_db, env);
     
     // Test 2: Verify chain ID handling
     assert_eq!(evm.chain_id(), 1);
@@ -86,7 +88,9 @@ fn test_basic_evm_creation() {
     
     let env = EvmEnv { block_env, cfg_env };
     let factory = EthEvmFactory::default();
-    let evm = factory.create_evm(MultiEmptyDB::default(), env);
+    let mut multi_db = MultiEmptyDB::new();
+    multi_db.add_chain(999, EmptyDB::default());
+    let evm = factory.create_evm(multi_db, env);
     
     // Verify block is set correctly
     let block = evm.block();
@@ -108,7 +112,9 @@ fn test_different_chain_configs() {
         
         let env = EvmEnv { block_env, cfg_env: cfg_env.clone() };
         let factory = EthEvmFactory::default();
-        let evm = factory.create_evm(MultiEmptyDB::default(), env);
+        let mut multi_db = MultiEmptyDB::new();
+        multi_db.add_chain(chain_id, EmptyDB::default());
+        let evm = factory.create_evm(multi_db, env);
         
         assert_eq!(evm.chain_id(), chain_id);
         assert_eq!(evm.block().number, 1000 * chain_id);

@@ -8,15 +8,12 @@ use core::{
     ops::{Deref, DerefMut},
 };
 use revm::{
-    context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv, multi_chain_tx::TxKind},
+    context::{multi_chain_tx::TxKind, BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
     context_interface::result::{EVMError, HaltReason, ResultAndState},
-    primitives::ChainAddress,
     handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
-    inspector::NoOpInspector,
-    interpreter::{interpreter::EthInterpreter, InterpreterResult},
-    precompile::{PrecompileSpecId, Precompiles},
-    primitives::hardfork::SpecId,
-    Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext,
+    inspector::NoOpInspector, interpreter::{interpreter::EthInterpreter, InterpreterResult},
+    precompile::{PrecompileSpecId, Precompiles}, primitives::{hardfork::SpecId, ChainAddress, HashMap},
+    Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext
 };
 
 mod block;
@@ -116,7 +113,7 @@ where
         // The Context.block is HashMap<u64, BlockEnv>
         // We need to get the BlockEnv for the current chain_id
         let chain_id = self.chain_id();
-        
+
         self.inner.ctx.block.get(&chain_id)
             .or_else(|| self.inner.ctx.block.get(&0))  // fallback to chain 0
             .unwrap_or_else(|| {
@@ -224,14 +221,14 @@ where
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
         let Context { block: block_map, cfg: cfg_env, journaled_state, .. } = self.inner.ctx;
-        
+
         // Extract the BlockEnv for the current chain from the HashMap
         let chain_id = cfg_env.chain_id;
         let block_env = block_map.get(&chain_id)
             .or_else(|| block_map.get(&0))
             .cloned()
             .unwrap_or_default();
-        
+
         (journaled_state.database, EvmEnv { block_env, cfg_env })
     }
 
@@ -274,9 +271,9 @@ impl EvmFactory for EthEvmFactory {
         let spec_id = input.cfg_env.spec;
         // Create a HashMap with the block environment for the current chain
         let chain_id = input.cfg_env.chain_id;
-        let mut block_map = std::collections::HashMap::new();
+        let mut block_map = HashMap::new();
         block_map.insert(chain_id, input.block_env);
-        
+
         EthEvm {
             inner: Context::mainnet()
                 .with_block(block_map)
@@ -299,9 +296,9 @@ impl EvmFactory for EthEvmFactory {
         let spec_id = input.cfg_env.spec;
         // Create a HashMap with the block environment for the current chain
         let chain_id = input.cfg_env.chain_id;
-        let mut block_map = std::collections::HashMap::new();
+        let mut block_map = HashMap::new();
         block_map.insert(chain_id, input.block_env);
-        
+
         EthEvm {
             inner: Context::mainnet()
                 .with_block(block_map)
@@ -320,7 +317,7 @@ impl EvmFactory for EthEvmFactory {
 mod tests {
     use super::*;
     use alloy_primitives::address;
-    use revm::{database::MultiEmptyDB, primitives::hardfork::SpecId};
+    use revm::{database::{MultiEmptyDB, EmptyDB}, primitives::hardfork::SpecId};
 
     #[test]
     fn test_precompiles_with_correct_spec() {
@@ -349,7 +346,9 @@ mod tests {
 
             let early_env = EvmEnv { block_env: BlockEnv::default(), cfg_env: early_cfg_env };
             let factory = EthEvmFactory;
-            let mut early_evm = factory.create_evm(MultiEmptyDB::default(), early_env);
+            let mut multi_db = MultiEmptyDB::new();
+            multi_db.add_chain(1, EmptyDB::default());
+            let mut early_evm = factory.create_evm(multi_db, early_env);
 
             // precompile should NOT be available in early spec
             assert!(
@@ -362,7 +361,9 @@ mod tests {
             later_cfg_env.chain_id = 1;
 
             let later_env = EvmEnv { block_env: BlockEnv::default(), cfg_env: later_cfg_env };
-            let mut later_evm = factory.create_evm(MultiEmptyDB::default(), later_env);
+            let mut multi_db = MultiEmptyDB::new();
+            multi_db.add_chain(1, EmptyDB::default());
+            let mut later_evm = factory.create_evm(multi_db, later_env);
 
             // precompile should be available in later spec
             assert!(
