@@ -2,7 +2,7 @@
 
 use revm::{
     context::{BlockEnv, CfgEnv},
-    primitives::hardfork::SpecId,
+    primitives::{hardfork::SpecId, HashMap},
 };
 
 /// Container type that holds both the configuration and block environment for EVM execution.
@@ -11,7 +11,7 @@ pub struct EvmEnv<Spec = SpecId> {
     /// The configuration environment with handler settings
     pub cfg_env: CfgEnv<Spec>,
     /// The block environment containing block-specific data
-    pub block_env: BlockEnv,
+    pub block_env: HashMap<u64, BlockEnv>,
 }
 
 impl<Spec> EvmEnv<Spec> {
@@ -21,12 +21,12 @@ impl<Spec> EvmEnv<Spec> {
     ///
     /// * `cfg_env_with_handler_cfg` - The configuration environment with handler settings
     /// * `block` - The block environment containing block-specific data
-    pub const fn new(cfg_env: CfgEnv<Spec>, block_env: BlockEnv) -> Self {
+    pub const fn new(cfg_env: CfgEnv<Spec>, block_env: HashMap<u64, BlockEnv>) -> Self {
         Self { cfg_env, block_env }
     }
 
     /// Returns a reference to the block environment.
-    pub const fn block_env(&self) -> &BlockEnv {
+    pub const fn block_env(&self) -> &HashMap<u64, BlockEnv> {
         &self.block_env
     }
 
@@ -46,8 +46,8 @@ impl<Spec> EvmEnv<Spec> {
     }
 }
 
-impl<Spec> From<(CfgEnv<Spec>, BlockEnv)> for EvmEnv<Spec> {
-    fn from((cfg_env, block_env): (CfgEnv<Spec>, BlockEnv)) -> Self {
+impl<Spec> From<(CfgEnv<Spec>, HashMap<u64, BlockEnv>)> for EvmEnv<Spec> {
+    fn from((cfg_env, block_env): (CfgEnv<Spec>, HashMap<u64, BlockEnv>)) -> Self {
         Self { cfg_env, block_env }
     }
 }

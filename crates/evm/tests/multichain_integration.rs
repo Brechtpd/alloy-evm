@@ -3,7 +3,7 @@ use alloy_primitives::{address, Address, U256};
 use revm::{
     context::{BlockEnv, CfgEnv, TxEnv},
     database::{MultiEmptyDB, EmptyDB},
-    primitives::{hardfork::SpecId, ChainAddress},
+    primitives::{hardfork::SpecId, ChainAddress, HashMap},
     context::multi_chain_tx::TxKind,
 };
 
@@ -15,9 +15,12 @@ fn test_multichain_support() {
     cfg_env.chain_id = 1;
     
     // Create block environment for the chain
-    let mut block_env = BlockEnv::default();
-    block_env.number = 1000;
-    block_env.beneficiary = ChainAddress::new(1, address!("0x0000000000000000000000000000000000000001"));
+    let mut block = BlockEnv::default();
+    block.number = 1000;
+    block.beneficiary = ChainAddress::new(1, address!("0x0000000000000000000000000000000000000001"));
+    
+    let mut block_env = HashMap::new();
+    block_env.insert(1, block);
     
     let env = EvmEnv { block_env, cfg_env };
     let factory = EthEvmFactory::default();
@@ -82,9 +85,12 @@ fn test_basic_evm_creation() {
     cfg_env.spec = SpecId::SHANGHAI;
     cfg_env.chain_id = 999;
     
-    let mut block_env = BlockEnv::default();
-    block_env.number = 5000;
-    block_env.beneficiary = ChainAddress::new(999, address!("0x0000000000000000000000000000000000000000"));
+    let mut block = BlockEnv::default();
+    block.number = 5000;
+    block.beneficiary = ChainAddress::new(999, address!("0x0000000000000000000000000000000000000000"));
+    
+    let mut block_env = HashMap::new();
+    block_env.insert(999, block);
     
     let env = EvmEnv { block_env, cfg_env };
     let factory = EthEvmFactory::default();
@@ -106,9 +112,12 @@ fn test_different_chain_configs() {
     for chain_id in [1u64, 10, 42161] {
         cfg_env.chain_id = chain_id;
         
-        let mut block_env = BlockEnv::default();
-        block_env.number = 1000 * chain_id;
-        block_env.beneficiary = ChainAddress::new(chain_id, Address::from([chain_id as u8; 20]));
+        let mut block = BlockEnv::default();
+        block.number = 1000 * chain_id;
+        block.beneficiary = ChainAddress::new(chain_id, Address::from([chain_id as u8; 20]));
+        
+        let mut block_env = HashMap::new();
+        block_env.insert(chain_id, block);
         
         let env = EvmEnv { block_env, cfg_env: cfg_env.clone() };
         let factory = EthEvmFactory::default();

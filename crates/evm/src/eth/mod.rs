@@ -12,7 +12,7 @@ use revm::{
     context_interface::result::{EVMError, HaltReason, ResultAndState},
     handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
     inspector::NoOpInspector, interpreter::{interpreter::EthInterpreter, InterpreterResult},
-    precompile::{PrecompileSpecId, Precompiles}, primitives::{hardfork::SpecId, ChainAddress, HashMap},
+    precompile::{PrecompileSpecId, Precompiles}, primitives::{hardfork::SpecId, ChainAddress},
     Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext
 };
 
@@ -220,14 +220,7 @@ where
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
-        let Context { block: block_map, cfg: cfg_env, journaled_state, .. } = self.inner.ctx;
-
-        // Extract the BlockEnv for the current chain from the HashMap
-        let chain_id = cfg_env.chain_id;
-        let block_env = block_map.get(&chain_id)
-            .or_else(|| block_map.get(&0))
-            .cloned()
-            .unwrap_or_default();
+        let Context { block: block_env, cfg: cfg_env, journaled_state, .. } = self.inner.ctx;
 
         (journaled_state.database, EvmEnv { block_env, cfg_env })
     }
@@ -269,14 +262,10 @@ impl EvmFactory for EthEvmFactory {
 
     fn create_evm<DB: MultiDatabase>(&self, db: DB, input: EvmEnv) -> Self::Evm<DB, NoOpInspector> {
         let spec_id = input.cfg_env.spec;
-        // Create a HashMap with the block environment for the current chain
-        let chain_id = input.cfg_env.chain_id;
-        let mut block_map = HashMap::new();
-        block_map.insert(chain_id, input.block_env);
 
         EthEvm {
             inner: Context::mainnet()
-                .with_block(block_map)
+                .with_block(input.block_env)
                 .with_cfg(input.cfg_env)
                 .with_db(db)
                 .build_mainnet_with_inspector(NoOpInspector {})
@@ -294,14 +283,10 @@ impl EvmFactory for EthEvmFactory {
         inspector: I,
     ) -> Self::Evm<DB, I> {
         let spec_id = input.cfg_env.spec;
-        // Create a HashMap with the block environment for the current chain
-        let chain_id = input.cfg_env.chain_id;
-        let mut block_map = HashMap::new();
-        block_map.insert(chain_id, input.block_env);
 
         EthEvm {
             inner: Context::mainnet()
-                .with_block(block_map)
+                .with_block(input.block_env)
                 .with_cfg(input.cfg_env)
                 .with_db(db)
                 .build_mainnet_with_inspector(inspector)
@@ -317,7 +302,7 @@ impl EvmFactory for EthEvmFactory {
 mod tests {
     use super::*;
     use alloy_primitives::address;
-    use revm::{database::{MultiEmptyDB, EmptyDB}, primitives::hardfork::SpecId};
+    use revm::{database::{MultiEmptyDB, EmptyDB}, primitives::{hardfork::SpecId, HashMap}};
 
     #[test]
     fn test_precompiles_with_correct_spec() {
@@ -344,7 +329,9 @@ mod tests {
             early_cfg_env.spec = early_spec;
             early_cfg_env.chain_id = 1;
 
-            let early_env = EvmEnv { block_env: BlockEnv::default(), cfg_env: early_cfg_env };
+            let mut block_map = HashMap::new();
+            block_map.insert(1, BlockEnv::default());
+            let early_env = EvmEnv { block_env: block_map, cfg_env: early_cfg_env };
             let factory = EthEvmFactory;
             let mut multi_db = MultiEmptyDB::new();
             multi_db.add_chain(1, EmptyDB::default());
@@ -360,7 +347,9 @@ mod tests {
             later_cfg_env.spec = later_spec;
             later_cfg_env.chain_id = 1;
 
-            let later_env = EvmEnv { block_env: BlockEnv::default(), cfg_env: later_cfg_env };
+            let mut block_map = HashMap::new();
+            block_map.insert(1, BlockEnv::default());
+            let later_env = EvmEnv { block_env: block_map, cfg_env: later_cfg_env };
             let mut multi_db = MultiEmptyDB::new();
             multi_db.add_chain(1, EmptyDB::default());
             let mut later_evm = factory.create_evm(multi_db, later_env);
