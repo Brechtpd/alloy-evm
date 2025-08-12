@@ -65,7 +65,7 @@ impl<T, TxEnv: FromRecoveredTx<T>> IntoTxEnv<TxEnv> for &Recovered<T> {
 impl FromRecoveredTx<TxLegacy> for TxEnv {
     fn from_recovered_tx(tx: &TxLegacy, caller: Address) -> Self {
         let TxLegacy { chain_id, nonce, gas_price, gas_limit, to, value, input } = tx;
-        let resolved_chain_id = chain_id.unwrap_or(1);
+        let resolved_chain_id = chain_id.unwrap_or(160010);
         Self {
             tx_type: tx.ty(),
             caller: ChainAddress::new(resolved_chain_id, caller),
