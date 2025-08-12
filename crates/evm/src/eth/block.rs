@@ -133,6 +133,10 @@ where
             return Ok(None);
         }
 
+        if !result.is_success() {
+            println!("result: {:?}", result);
+        }
+
         self.system_caller.on_state(StateChangeSource::Transaction(self.receipts.len()), &state);
 
         let gas_used = result.gas_used();
