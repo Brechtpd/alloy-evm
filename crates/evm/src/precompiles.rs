@@ -10,7 +10,7 @@ use revm::{
     context::{Cfg, ContextTr, LocalContextTr},
     handler::{EthPrecompiles, PrecompileProvider},
     interpreter::{CallInput, Gas, InputsImpl, InstructionResult, InterpreterResult},
-    precompile::{PrecompileError, PrecompileResult, Precompiles},
+    precompile::{PrecompileContext, PrecompileError, PrecompileResult, Precompiles},
 };
 
 /// A mapping of precompile contracts that can be either static (builtin) or dynamic.
@@ -110,7 +110,9 @@ impl PrecompilesMap {
             };
 
             for (addr, precompile_fn) in static_precompiles.inner() {
-                let dyn_precompile: DynPrecompile = (*precompile_fn).into();
+                // Wrap the static precompile function to match our DynPrecompile signature
+                let wrapped = WrapperPrecompile { inner: *precompile_fn };
+                let dyn_precompile = DynPrecompile(Arc::new(wrapped));
                 dynamic.inner.insert(*addr, dyn_precompile);
                 dynamic.addresses.insert(*addr);
             }
@@ -135,7 +137,9 @@ impl PrecompilesMap {
     /// Gets a reference to the precompile at the given address.
     pub fn get(&self, address: &Address) -> Option<impl Precompile + '_> {
         match self {
-            Self::Builtin(precompiles) => precompiles.get(address).map(Either::Left),
+            Self::Builtin(precompiles) => precompiles.get(address).map(|f| {
+                Either::Left(WrapperPrecompile { inner: *f })
+            }),
             Self::Dynamic(dyn_precompiles) => dyn_precompiles.inner.get(address).map(Either::Right),
         }
     }
@@ -244,14 +248,7 @@ impl core::fmt::Debug for DynPrecompile {
     }
 }
 
-impl<'a, F> From<F> for DynPrecompile
-where
-    F: FnOnce(&'a [u8], u64) -> PrecompileResult + Precompile + Send + Sync + 'static,
-{
-    fn from(f: F) -> Self {
-        Self(Arc::new(f))
-    }
-}
+// From impl removed - no longer using closures directly
 
 /// A mutable representation of precompiles that allows for runtime modification.
 ///
@@ -268,6 +265,17 @@ pub struct DynPrecompiles {
 impl core::fmt::Debug for DynPrecompiles {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("DynPrecompiles").field("addresses", &self.addresses).finish()
+    }
+}
+
+/// Wrapper to adapt revm's 3-parameter precompiles to our 2-parameter trait.
+struct WrapperPrecompile {
+    inner: fn(&[u8], u64, Option<&PrecompileContext>) -> PrecompileResult,
+}
+
+impl Precompile for WrapperPrecompile {
+    fn call(&self, data: &[u8], gas: u64) -> PrecompileResult {
+        (self.inner)(data, gas, None)
     }
 }
 
@@ -334,7 +342,7 @@ mod tests {
             _ => panic!("Expected dynamic precompiles"),
         };
 
-        let result = dyn_precompile.call(&test_input, gas_limit).unwrap();
+        let result = dyn_precompile.0.call(&test_input, gas_limit).unwrap();
         assert_eq!(result.bytes, test_input, "Identity precompile should return the input data");
 
         // define a function to modify the precompile
@@ -344,10 +352,13 @@ mod tests {
         // define a function to modify the precompile to always return a constant value
         spec_precompiles.map_precompile(&identity_address, move |_original_dyn| {
             // create a new DynPrecompile that always returns our constant
-            |_data: &[u8], _gas: u64| -> PrecompileResult {
-                Ok(PrecompileOutput { gas_used: 10, bytes: Bytes::from_static(b"constant value") })
+            struct ConstantPrecompile;
+            impl Precompile for ConstantPrecompile {
+                fn call(&self, _data: &[u8], _gas: u64) -> PrecompileResult {
+                    Ok(PrecompileOutput { gas_used: 10, bytes: Bytes::from_static(b"constant value") })
+                }
             }
-            .into()
+            DynPrecompile(Arc::new(ConstantPrecompile))
         });
 
         // get the modified precompile and check it
@@ -358,7 +369,7 @@ mod tests {
             _ => panic!("Expected dynamic precompiles"),
         };
 
-        let result = dyn_precompile.call(&test_input, gas_limit).unwrap();
+        let result = dyn_precompile.0.call(&test_input, gas_limit).unwrap();
         assert_eq!(
             result.bytes, constant_bytes,
             "Modified precompile should return the constant value"
@@ -372,15 +383,19 @@ mod tests {
         let gas_limit = 1000;
 
         // define a closure that implements the precompile functionality
-        let closure_precompile = |data: &[u8], _gas: u64| -> PrecompileResult {
-            let mut output = b"processed: ".to_vec();
-            output.extend_from_slice(data.as_ref());
-            Ok(PrecompileOutput { gas_used: 15, bytes: Bytes::from(output) })
-        };
+        struct TestPrecompile;
+        impl Precompile for TestPrecompile {
+            fn call(&self, data: &[u8], _gas: u64) -> PrecompileResult {
+                let mut output = b"processed: ".to_vec();
+                output.extend_from_slice(data);
+                Ok(PrecompileOutput { gas_used: 15, bytes: Bytes::from(output) })
+            }
+        }
+        let closure_precompile = TestPrecompile;
 
-        let dyn_precompile: DynPrecompile = closure_precompile.into();
+        let dyn_precompile = DynPrecompile(Arc::new(closure_precompile));
 
-        let result = dyn_precompile.call(&test_input, gas_limit).unwrap();
+        let result = dyn_precompile.0.call(&test_input, gas_limit).unwrap();
         assert_eq!(result.gas_used, 15);
         assert_eq!(result.bytes, expected_output);
     }
