@@ -26,7 +26,7 @@ use revm::{
     context::result::{ExecutionResult, ResultAndState},
     database::State,
     database_interface::MultiChainDatabaseCommit,
-    primitives::ChainAddress,
+    primitives::{ChainAddress, HashMap},
     Inspector,
 };
 
@@ -241,6 +241,8 @@ where
                 receipts: self.receipts,
                 requests: Default::default(),
                 gas_used,
+                state_changes: Vec::new(),
+                gas_used_per_chain: Default::default(),
             },
         ))
     }

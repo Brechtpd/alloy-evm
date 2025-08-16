@@ -6,7 +6,8 @@ use crate::{
 use alloc::{boxed::Box, vec::Vec};
 use alloy_eips::eip7685::Requests;
 use revm::{
-    context::result::ExecutionResult, database::State, inspector::NoOpInspector, Inspector,
+    context::result::ExecutionResult, database::State, inspector::NoOpInspector,
+    primitives::{HashMap, StateChanges}, Inspector
 };
 
 mod error;
@@ -31,6 +32,10 @@ pub struct BlockExecutionResult<T> {
     pub requests: Requests,
     /// The total gas used by the block.
     pub gas_used: u64,
+    /// The state changes
+    pub state_changes: Vec<StateChanges>,
+    /// The total gas used by the block.
+    pub gas_used_per_chain: HashMap<u64, u64>,
 }
 
 /// Helper trait to encapsulate requirements for a type to be used as input for [`BlockExecutor`].

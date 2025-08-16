@@ -23,7 +23,7 @@ use alloy_primitives::{Log, B256};
 use revm::{
     context::result::ExecutionResult, context_interface::result::ResultAndState,
     database::State, database_interface::MultiChainDatabaseCommit,
-    primitives::ChainAddress, Inspector,
+    primitives::{ChainAddress, HashMap, StateChanges}, Inspector,
 };
 
 /// Context for Ethereum block execution.
@@ -58,6 +58,10 @@ pub struct EthBlockExecutor<'a, Evm, Spec, R: ReceiptBuilder> {
     receipts: Vec<R::Receipt>,
     /// Total gas used by transactions in this block.
     gas_used: u64,
+    /// State changes from executed transactions.
+    state_changes: Vec<StateChanges>,
+    /// Gas used per chain.
+    gas_used_per_chain: HashMap<u64, u64>,
 }
 
 impl<'a, Evm, Spec, R> EthBlockExecutor<'a, Evm, Spec, R>
@@ -72,6 +76,8 @@ where
             ctx,
             receipts: Vec::new(),
             gas_used: 0,
+            state_changes: Vec::new(),
+            gas_used_per_chain: HashMap::new(),
             system_caller: SystemCaller::new(spec.clone()),
             spec,
             receipt_builder,
@@ -141,6 +147,13 @@ where
         self.system_caller.on_state(StateChangeSource::Transaction(self.receipts.len()), &state);
 
         let gas_used = result.gas_used();
+
+        // Track gas used per chain
+        for (chain_id, chain_gas) in result.gas_used_per_chain() {
+            *self.gas_used_per_chain.entry(chain_id).or_default() += chain_gas;
+        }
+
+        self.state_changes.push(result.state_changes());
 
         // append gas used
         self.gas_used += gas_used;
@@ -225,7 +238,13 @@ where
 
         Ok((
             self.evm,
-            BlockExecutionResult { receipts: self.receipts, requests, gas_used: self.gas_used },
+            BlockExecutionResult {
+                receipts: self.receipts,
+                requests,
+                gas_used: self.gas_used,
+                state_changes: self.state_changes,
+                gas_used_per_chain: self.gas_used_per_chain,
+            },
         ))
     }
 
