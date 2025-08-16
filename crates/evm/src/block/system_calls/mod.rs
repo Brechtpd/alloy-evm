@@ -55,8 +55,9 @@ where
         header: impl BlockHeader,
         evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<(), BlockExecutionError> {
-        self.apply_blockhashes_contract_call(header.parent_hash(), evm)?;
-        self.apply_beacon_root_contract_call(header.parent_beacon_block_root(), evm)?;
+        // TODO(Brecht): do it
+        //self.apply_blockhashes_contract_call(header.parent_hash(), evm)?;
+        //self.apply_beacon_root_contract_call(header.parent_beacon_block_root(), evm)?;
 
         Ok(())
     }
