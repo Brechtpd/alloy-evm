@@ -262,7 +262,7 @@ impl EvmFactory for EthEvmFactory {
 
     fn create_evm<DB: MultiDatabase>(&self, db: DB, input: EvmEnv) -> Self::Evm<DB, NoOpInspector> {
         let spec_id = input.cfg_env.spec;
-
+        let xchain = input.cfg_env.xchain;
         EthEvm {
             inner: Context::mainnet()
                 .with_block(input.block_env)
@@ -271,6 +271,7 @@ impl EvmFactory for EthEvmFactory {
                 .build_mainnet_with_inspector(NoOpInspector {})
                 .with_precompiles(PrecompilesMap::from_static(Precompiles::new(
                     PrecompileSpecId::from_spec_id(spec_id),
+                    xchain,
                 ))),
             inspect: false,
         }
@@ -283,7 +284,7 @@ impl EvmFactory for EthEvmFactory {
         inspector: I,
     ) -> Self::Evm<DB, I> {
         let spec_id = input.cfg_env.spec;
-
+        let xchain = input.cfg_env.xchain;
         EthEvm {
             inner: Context::mainnet()
                 .with_block(input.block_env)
@@ -292,6 +293,7 @@ impl EvmFactory for EthEvmFactory {
                 .build_mainnet_with_inspector(inspector)
                 .with_precompiles(PrecompilesMap::from_static(Precompiles::new(
                     PrecompileSpecId::from_spec_id(spec_id),
+                    xchain,
                 ))),
             inspect: true,
         }

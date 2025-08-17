@@ -170,6 +170,12 @@ impl<CTX: ContextTr> PrecompileProvider<CTX> for PrecompilesMap {
         false
     }
 
+    fn set_spec_with_xchain(&mut self, _spec: <CTX::Cfg as Cfg>::Spec, _xchain: bool) -> bool {
+        // For now, we don't need to handle xchain differently in the map
+        // Just return false to indicate we didn't change anything
+        false
+    }
+
     fn run(
         &mut self,
         context: &mut CTX,
