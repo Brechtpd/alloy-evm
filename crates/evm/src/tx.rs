@@ -10,7 +10,7 @@ use alloy_eips::{
     Typed2718,
 };
 use alloy_primitives::{Address, Bytes, TxKind as PrimitiveTxKind};
-use revm::{context::{TxEnv, multi_chain_tx::TxKind}, context_interface::either::Either, primitives::ChainAddress};
+use revm::{context::TxEnv, context_interface::either::Either, primitives::{ChainAddress, MultiChainTxKind as TxKind}};
 
 /// Trait marking types that can be converted into a transaction environment.
 pub trait IntoTxEnv<TxEnv> {

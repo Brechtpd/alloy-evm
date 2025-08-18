@@ -8,7 +8,8 @@ use core::{
     ops::{Deref, DerefMut},
 };
 use revm::{
-    context::{multi_chain_tx::TxKind, BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
+    primitives::MultiChainTxKind as TxKind,
+    context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
     context_interface::result::{EVMError, HaltReason, ResultAndState},
     handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
     inspector::NoOpInspector, interpreter::{interpreter::EthInterpreter, InterpreterResult},
