@@ -24,6 +24,7 @@ pub(crate) fn transact_beacon_root_contract_call<Halt>(
     spec: impl EthereumHardforks,
     parent_beacon_block_root: Option<B256>,
     evm: &mut impl Evm<HaltReason = Halt>,
+    chain_id: u64,
 ) -> Result<Option<ResultAndState<Halt>>, BlockExecutionError> {
     if !spec.is_cancun_active_at_timestamp(evm.block().timestamp) {
         return Ok(None);
@@ -45,8 +46,8 @@ pub(crate) fn transact_beacon_root_contract_call<Halt>(
     }
 
     let res = match evm.transact_system_call(
-        ChainAddress(evm.chain_id(), alloy_eips::eip4788::SYSTEM_ADDRESS),
-        ChainAddress(evm.chain_id(), BEACON_ROOTS_ADDRESS),
+        ChainAddress(chain_id, alloy_eips::eip4788::SYSTEM_ADDRESS),
+        ChainAddress(chain_id, BEACON_ROOTS_ADDRESS),
         parent_beacon_block_root.0.into(),
     ) {
         Ok(res) => res,

@@ -238,7 +238,7 @@ pub trait BlockExecutorFactory: 'static {
     fn create_executor<'a, DB, I>(
         &'a self,
         evm: <Self::EvmFactory as EvmFactory>::Evm<&'a mut State<DB>, I>,
-        ctx: Self::ExecutionCtx<'a>,
+        ctx: HashMap<u64, Self::ExecutionCtx<'a>>,
     ) -> impl BlockExecutorFor<'a, Self, DB, I>
     where
         DB: MultiDatabase + 'a,

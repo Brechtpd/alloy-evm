@@ -46,7 +46,7 @@ pub struct EthBlockExecutor<'a, Evm, Spec, R: ReceiptBuilder> {
     spec: Spec,
 
     /// Context for block execution.
-    pub ctx: EthBlockExecutionCtx<'a>,
+    pub ctx: HashMap<u64, EthBlockExecutionCtx<'a>>,
     /// Inner EVM.
     evm: Evm,
     /// Utility to call system smart contracts.
@@ -70,7 +70,7 @@ where
     R: ReceiptBuilder,
 {
     /// Creates a new [`EthBlockExecutor`]
-    pub fn new(evm: Evm, ctx: EthBlockExecutionCtx<'a>, spec: Spec, receipt_builder: R) -> Self {
+    pub fn new(evm: Evm, ctx: HashMap<u64, EthBlockExecutionCtx<'a>>, spec: Spec, receipt_builder: R) -> Self {
         Self {
             evm,
             ctx,
@@ -105,10 +105,11 @@ where
             self.spec.is_spurious_dragon_active_at_block(self.evm.block().number);
         self.evm.db_mut().set_state_clear_flag(state_clear_flag);
 
-        // TODO(Brecht): do it
-        // self.system_caller.apply_blockhashes_contract_call(self.ctx.parent_hash, &mut self.evm)?;
-        // self.system_caller
-        //     .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
+        for (&chain_id, ctx) in self.ctx.iter() {
+            self.system_caller.apply_blockhashes_contract_call(ctx.parent_hash, &mut self.evm, chain_id)?;
+            self.system_caller
+                .apply_beacon_root_contract_call(ctx.parent_beacon_block_root, &mut self.evm, chain_id)?;
+        }
 
         Ok(())
     }
@@ -197,8 +198,8 @@ where
         let mut balance_increments = post_block_balance_increments(
             &self.spec,
             self.evm.block(),
-            self.ctx.ommers,
-            self.ctx.withdrawals.as_deref(),
+            self.ctx.get(&chain_id).unwrap().ommers,
+            self.ctx.get(&chain_id).unwrap().withdrawals.as_deref(),
         );
 
         // Irregular state change at Ethereum DAO hardfork
@@ -318,7 +319,7 @@ where
     fn create_executor<'a, DB, I>(
         &'a self,
         evm: EvmF::Evm<&'a mut State<DB>, I>,
-        ctx: Self::ExecutionCtx<'a>,
+        ctx: HashMap<u64, Self::ExecutionCtx<'a>>,
     ) -> impl BlockExecutorFor<'a, Self, DB, I>
     where
         DB: MultiDatabase + 'a,

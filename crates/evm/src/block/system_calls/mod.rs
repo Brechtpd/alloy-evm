@@ -55,9 +55,9 @@ where
         headers: HashMap<u64, impl BlockHeader>,
         evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<(), BlockExecutionError> {
-        for (_, header) in headers.iter() {
-            self.apply_blockhashes_contract_call(header.parent_hash(), evm)?;
-            self.apply_beacon_root_contract_call(header.parent_beacon_block_root(), evm)?;
+        for (&chain_id, header) in headers.iter() {
+            self.apply_blockhashes_contract_call(header.parent_hash(), evm, chain_id)?;
+            self.apply_beacon_root_contract_call(header.parent_beacon_block_root(), evm, chain_id)?;
         }
 
         Ok(())
@@ -90,9 +90,10 @@ where
         &mut self,
         parent_block_hash: B256,
         evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
+        chain_id: u64,
     ) -> Result<(), BlockExecutionError> {
         let result_and_state =
-            eip2935::transact_blockhashes_contract_call(&self.spec, parent_block_hash, evm)?;
+            eip2935::transact_blockhashes_contract_call(&self.spec, parent_block_hash, evm, chain_id)?;
 
         if let Some(res) = result_and_state {
             if let Some(hook) = &mut self.hook {
@@ -112,9 +113,10 @@ where
         &mut self,
         parent_beacon_block_root: Option<B256>,
         evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
+        chain_id: u64,
     ) -> Result<(), BlockExecutionError> {
         let result_and_state =
-            eip4788::transact_beacon_root_contract_call(&self.spec, parent_beacon_block_root, evm)?;
+            eip4788::transact_beacon_root_contract_call(&self.spec, parent_beacon_block_root, evm, chain_id)?;
 
         if let Some(res) = result_and_state {
             if let Some(hook) = &mut self.hook {

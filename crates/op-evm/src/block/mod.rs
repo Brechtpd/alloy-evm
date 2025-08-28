@@ -26,7 +26,7 @@ use revm::{
     context::result::{ExecutionResult, ResultAndState},
     database::State,
     database_interface::MultiChainDatabaseCommit,
-    primitives::ChainAddress,
+    primitives::{ChainAddress, HashMap},
     Inspector,
 };
 
@@ -107,9 +107,10 @@ where
             self.spec.is_spurious_dragon_active_at_block(self.evm.block().number);
         self.evm.db_mut().set_state_clear_flag(state_clear_flag);
 
-        self.system_caller.apply_blockhashes_contract_call(self.ctx.parent_hash, &mut self.evm)?;
+        let chain_id = self.evm.chain_id();
+        self.system_caller.apply_blockhashes_contract_call(self.ctx.parent_hash, &mut self.evm, chain_id)?;
         self.system_caller
-            .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm)?;
+            .apply_beacon_root_contract_call(self.ctx.parent_beacon_block_root, &mut self.evm, chain_id)?;
 
         // Ensure that the create2deployer is force-deployed at the canyon transition. Optimism
         // blocks will always have at least a single transaction in them (the L1 info transaction),
@@ -317,13 +318,15 @@ where
     fn create_executor<'a, DB, I>(
         &'a self,
         evm: EvmF::Evm<&'a mut State<DB>, I>,
-        ctx: Self::ExecutionCtx<'a>,
+        ctx: HashMap<u64, Self::ExecutionCtx<'a>>,
     ) -> impl BlockExecutorFor<'a, Self, DB, I>
     where
         DB: MultiDatabase + 'a,
         I: Inspector<EvmF::Context<&'a mut State<DB>>> + 'a,
     {
-        OpBlockExecutor::new(evm, ctx, &self.spec, &self.receipt_builder)
+        // For OP, we take the single context (OP is single-chain)
+        let single_ctx = ctx.into_values().next().unwrap_or_default();
+        OpBlockExecutor::new(evm, single_ctx, &self.spec, &self.receipt_builder)
     }
 }
 
