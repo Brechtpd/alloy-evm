@@ -62,5 +62,7 @@ pub(crate) fn transact_beacon_root_contract_call<Halt>(
         }
     };
 
+    println!("OK: {:?}", res.state);
+
     Ok(Some(res))
 }
