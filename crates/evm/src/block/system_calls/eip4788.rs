@@ -26,6 +26,7 @@ pub(crate) fn transact_beacon_root_contract_call<Halt>(
     evm: &mut impl Evm<HaltReason = Halt>,
     chain_id: u64,
 ) -> Result<Option<ResultAndState<Halt>>, BlockExecutionError> {
+    println!("[{}] transact_beacon_root_contract_call...", chain_id);
     if !spec.is_cancun_active_at_timestamp(evm.block().timestamp) {
         return Ok(None);
     }
@@ -45,6 +46,7 @@ pub(crate) fn transact_beacon_root_contract_call<Halt>(
         return Ok(None);
     }
 
+    println!("applying transact_beacon_root_contract_call");
     let res = match evm.transact_system_call(
         ChainAddress(chain_id, alloy_eips::eip4788::SYSTEM_ADDRESS),
         ChainAddress(chain_id, BEACON_ROOTS_ADDRESS),
