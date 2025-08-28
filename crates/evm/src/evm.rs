@@ -1,17 +1,13 @@
 //! Abstraction over EVM.
 
 use crate::{EvmEnv, EvmError, IntoTxEnv};
-use alloy_primitives::{Address, Bytes};
+use alloy_primitives::Bytes;
 use core::{error::Error, fmt::Debug, hash::Hash};
 use revm::{
-    context::{result::ExecutionResult, BlockEnv},
-    context_interface::{
+    context::{result::ExecutionResult, BlockEnv}, context_interface::{
         result::{HaltReasonTr, ResultAndState},
         ContextTr,
-    },
-    database_interface::{MultiChainDatabase, MultiChainDatabaseCommit},
-    inspector::{JournalExt, NoOpInspector},
-    Inspector,
+    }, database_interface::{MultiChainDatabase, MultiChainDatabaseCommit}, inspector::{JournalExt, NoOpInspector}, primitives::{ChainAddress, HashMap}, Inspector
 };
 
 /// Helper trait to bound [`MultiChainDatabase::Error`] with common requirements.
@@ -48,8 +44,17 @@ pub trait Evm {
     /// Evm inspector.
     type Inspector;
 
-    /// Reference to [`BlockEnv`].
-    fn block(&self) -> &BlockEnv;
+    /// Reference to all blocks as a HashMap.
+    fn blocks(&self) -> &HashMap<u64, BlockEnv>;
+
+    /// Reference to the current chain's [`BlockEnv`].
+    fn block(&self) -> &BlockEnv {
+        let chain_id = self.chain_id();
+        self.blocks()
+            .get(&chain_id)
+            .or_else(|| self.blocks().get(&0)) // fallback to chain 0
+            .expect("No block environment found for chain or fallback chain 0")
+    }
 
     /// Returns the chain ID of the environment.
     fn chain_id(&self) -> u64;
@@ -76,8 +81,8 @@ pub trait Evm {
     /// covering edge cases when beneficiary is set to the system contract address.
     fn transact_system_call(
         &mut self,
-        caller: Address,
-        contract: Address,
+        caller: ChainAddress,
+        contract: ChainAddress,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error>;
 

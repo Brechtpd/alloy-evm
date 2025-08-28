@@ -3,8 +3,7 @@ use alloy_primitives::{address, Address, U256};
 use revm::{
     context::{BlockEnv, CfgEnv, TxEnv},
     database::{MultiEmptyDB, EmptyDB},
-    primitives::{hardfork::SpecId, ChainAddress, HashMap},
-    context::multi_chain_tx::TxKind,
+    primitives::{hardfork::SpecId, ChainAddress, HashMap, MultiChainTxKind as TxKind},
 };
 
 #[test]
@@ -62,8 +61,8 @@ fn test_multichain_support() {
     
     // Test 5: System call with automatic chain ID
     let result = evm.transact_system_call(
-        address!("0x3333333333333333333333333333333333333333"),
-        address!("0x4444444444444444444444444444444444444444"),
+        ChainAddress::new(1, address!("0x3333333333333333333333333333333333333333")),
+        ChainAddress::new(1, address!("0x4444444444444444444444444444444444444444")),
         Default::default(),
     );
     

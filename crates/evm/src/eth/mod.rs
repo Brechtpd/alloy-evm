@@ -2,13 +2,13 @@
 
 use crate::{env::EvmEnv, evm::EvmFactory, precompiles::PrecompilesMap, Evm, MultiDatabase};
 use alloc::vec::Vec;
-use alloy_primitives::{Address, Bytes, U256};
+use alloy_primitives::{Bytes, U256};
 use core::{
     fmt::Debug,
     ops::{Deref, DerefMut},
 };
 use revm::{
-    primitives::MultiChainTxKind as TxKind,
+    primitives::{MultiChainTxKind as TxKind, HashMap},
     context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
     context_interface::result::{EVMError, HaltReason, ResultAndState},
     handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
@@ -110,16 +110,8 @@ where
     type Precompiles = PRECOMPILE;
     type Inspector = I;
 
-    fn block(&self) -> &BlockEnv {
-        // The Context.block is HashMap<u64, BlockEnv>
-        // We need to get the BlockEnv for the current chain_id
-        let chain_id = self.chain_id();
-
-        self.inner.ctx.block.get(&chain_id)
-            .or_else(|| self.inner.ctx.block.get(&0))  // fallback to chain 0
-            .unwrap_or_else(|| {
-                panic!("No block environment found for chain {chain_id} or fallback chain 0")
-            })
+    fn blocks(&self) -> &HashMap<u64, BlockEnv> {
+        &self.inner.ctx.block
     }
 
     fn chain_id(&self) -> u64 {
@@ -137,14 +129,15 @@ where
 
     fn transact_system_call(
         &mut self,
-        caller: Address,
-        contract: Address,
+        caller: ChainAddress,
+        contract: ChainAddress,
         data: Bytes,
     ) -> Result<ResultAndState, Self::Error> {
-        let chain_id = self.chain_id();
+        let chain_id = contract.0;
+        let chain_ids = self.inner.ctx.block.keys().cloned().collect();
         let tx = TxEnv {
-            caller: ChainAddress::new(chain_id, caller),
-            kind: TxKind::Call(ChainAddress::new(chain_id, contract)),
+            caller: caller,
+            kind: TxKind::Call(contract),
             // Explicitly set nonce to 0 so revm does not do any nonce checks
             nonce: 0,
             gas_limit: 30_000_000,
@@ -164,7 +157,7 @@ where
             max_fee_per_blob_gas: 0,
             tx_type: 0,
             authorization_list: Default::default(),
-            chain_ids: Some(vec![chain_id]),
+            chain_ids: Some(chain_ids),
         };
 
         let mut gas_limit = tx.gas_limit;
@@ -210,7 +203,7 @@ where
         // We're doing this state cleanup to make sure that changeset only includes the changed
         // contract storage.
         if let Ok(res) = &mut res {
-            res.state.retain(|addr, _| addr.address() == contract);
+            res.state.retain(|addr, _| *addr == contract);
         }
 
         res

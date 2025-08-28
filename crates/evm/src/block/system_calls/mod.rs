@@ -11,7 +11,7 @@ use alloy_eips::{
 };
 use alloy_hardforks::EthereumHardforks;
 use alloy_primitives::{Bytes, B256};
-use revm::{database_interface::MultiChainDatabaseCommit, state::EvmState};
+use revm::{database_interface::MultiChainDatabaseCommit, primitives::HashMap, state::EvmState};
 
 use super::{StateChangePostBlockSource, StateChangePreBlockSource, StateChangeSource};
 
@@ -52,12 +52,13 @@ where
     /// Apply pre execution changes.
     pub fn apply_pre_execution_changes(
         &mut self,
-        header: impl BlockHeader,
+        headers: HashMap<u64, impl BlockHeader>,
         evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<(), BlockExecutionError> {
-        // TODO(Brecht): do it
-        //self.apply_blockhashes_contract_call(header.parent_hash(), evm)?;
-        //self.apply_beacon_root_contract_call(header.parent_beacon_block_root(), evm)?;
+        for (_, header) in headers.iter() {
+            self.apply_blockhashes_contract_call(header.parent_hash(), evm)?;
+            self.apply_beacon_root_contract_call(header.parent_beacon_block_root(), evm)?;
+        }
 
         Ok(())
     }

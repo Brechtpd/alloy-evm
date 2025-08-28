@@ -26,7 +26,7 @@ use revm::{
     context::result::{ExecutionResult, ResultAndState},
     database::State,
     database_interface::MultiChainDatabaseCommit,
-    primitives::{ChainAddress, HashMap},
+    primitives::ChainAddress,
     Inspector,
 };
 

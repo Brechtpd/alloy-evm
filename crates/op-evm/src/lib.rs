@@ -16,20 +16,17 @@ pub use block::{OpBlockExecutionCtx, OpBlockExecutor, OpBlockExecutorFactory};
 // The real implementation would require MultiChainBlockEnv to implement Block trait
 
 use alloy_evm::{Evm, EvmEnv, EvmFactory, MultiDatabase, InvalidTxError};
-use alloy_primitives::{Address, Bytes};
+use alloy_primitives::Bytes;
 use revm::{
-    context::{BlockEnv, TxEnv},
-    context_interface::result::{EVMError, ResultAndState, HaltReason},
-    inspector::NoOpInspector,
-    Inspector,
-    primitives::hardfork::SpecId,
+    context::{BlockEnv, TxEnv}, context_interface::result::{EVMError, HaltReason, ResultAndState}, 
+    inspector::NoOpInspector, primitives::{hardfork::SpecId, ChainAddress, HashMap}, Inspector
 };
 
 // Stub types to avoid op-revm compilation issues
 /// Stub OpHaltReason - uses regular HaltReason
 pub type OpHaltReason = HaltReason;
 
-/// Stub OpSpecId - uses regular SpecId  
+/// Stub OpSpecId - uses regular SpecId
 pub type OpSpecId = SpecId;
 
 /// Stub OpTransactionError
@@ -66,7 +63,7 @@ impl<DB: MultiDatabase, I> Evm for OpEvm<DB, I> {
     type Precompiles = ();
     type Inspector = I;
 
-    fn block(&self) -> &BlockEnv {
+    fn blocks(&self) -> &HashMap<u64, BlockEnv> {
         unimplemented!("OpEvm stub - not for production use")
     }
 
@@ -80,8 +77,8 @@ impl<DB: MultiDatabase, I> Evm for OpEvm<DB, I> {
 
     fn transact_system_call(
         &mut self,
-        _caller: Address,
-        _contract: Address,
+        _caller: ChainAddress,
+        _contract: ChainAddress,
         _data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
         unimplemented!("OpEvm stub - not for production use")
