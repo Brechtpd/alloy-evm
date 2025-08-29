@@ -115,7 +115,6 @@ where
         evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
         chain_id: u64,
     ) -> Result<(), BlockExecutionError> {
-        println!("[{}] apply_beacon_root_contract_call", chain_id);
         let result_and_state =
             eip4788::transact_beacon_root_contract_call(&self.spec, parent_beacon_block_root, evm, chain_id)?;
 

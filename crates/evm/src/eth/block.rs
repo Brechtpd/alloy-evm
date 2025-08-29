@@ -100,14 +100,12 @@ where
     type Evm = E;
 
     fn apply_pre_execution_changes(&mut self) -> Result<(), BlockExecutionError> {
-        println!("apply_pre_execution_changes");
         // Set state clear flag if the block is after the Spurious Dragon hardfork.
         let state_clear_flag =
             self.spec.is_spurious_dragon_active_at_block(self.evm.block().number);
         self.evm.db_mut().set_state_clear_flag(state_clear_flag);
 
         for (&chain_id, ctx) in self.ctx.iter() {
-            println!("apply_pre_execution_changes {}", chain_id);
             self.system_caller.apply_blockhashes_contract_call(ctx.parent_hash, &mut self.evm, chain_id)?;
             self.system_caller
                 .apply_beacon_root_contract_call(ctx.parent_beacon_block_root, &mut self.evm, chain_id)?;
