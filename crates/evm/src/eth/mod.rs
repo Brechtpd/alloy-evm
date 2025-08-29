@@ -128,6 +128,8 @@ where
             if tx_env.chain_id.unwrap() == 1 {
                 if self.cfg.parent_chain_id.is_some() {
                     tx_env.chain_id = self.cfg.parent_chain_id;
+                } else {
+                    tx_env.chain_id = Some(self.cfg.chain_id);
                 }
             }
         }
