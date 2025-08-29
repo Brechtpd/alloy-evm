@@ -123,6 +123,7 @@ where
         tx: impl crate::IntoTxEnv<Self::Tx>,
     ) -> Result<ResultAndState, Self::Error> {
         let mut tx_env = tx.into_tx_env();
+        println!("tx_env.chain_id: {:?}", tx_env.chain_id);
         // For legacy transactions defaulting to chain_id == 1, when they shouldn't
         if tx_env.chain_id.is_some() {
             if tx_env.chain_id.unwrap() == 1 {
