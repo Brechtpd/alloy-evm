@@ -125,16 +125,13 @@ where
         let mut tx_env = tx.into_tx_env();
         println!("tx_env.chain_id: {:?}", tx_env.chain_id);
         // For legacy transactions defaulting to chain_id == 1, when they shouldn't
-        if tx_env.chain_id.is_some() {
-            if tx_env.chain_id.unwrap() == 1 {
-                println!("CHAIN ID 1 oh no");
-                println!("self.cfg.parent_chain_id: {:?}", self.cfg.parent_chain_id);
-                println!("self.cfg.chain_id: {:?}", self.cfg.chain_id);
-                if self.cfg.parent_chain_id.is_some() {
-                    tx_env.chain_id = self.cfg.parent_chain_id;
-                } else {
-                    tx_env.chain_id = Some(self.cfg.chain_id);
-                }
+        if tx_env.chain_id.is_none() {
+            println!("self.cfg.parent_chain_id: {:?}", self.cfg.parent_chain_id);
+            println!("self.cfg.chain_id: {:?}", self.cfg.chain_id);
+            if self.cfg.parent_chain_id.is_some() {
+                tx_env.chain_id = self.cfg.parent_chain_id;
+            } else {
+                tx_env.chain_id = Some(self.cfg.chain_id);
             }
         }
         // TODO: eventually should be gotten from the tx somehow
