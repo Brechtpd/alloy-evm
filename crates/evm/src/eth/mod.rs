@@ -136,6 +136,7 @@ where
         }
         // TODO: eventually should be gotten from the tx somehow
         tx_env.chain_ids = Some(self.blocks().keys().cloned().collect());
+        println!("tx_env.chain_ids: {:?}", tx_env.chain_ids);
         self.transact_raw(tx_env)
     }
 
