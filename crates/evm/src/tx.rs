@@ -79,7 +79,6 @@ impl FromRecoveredTx<TxLegacy> for TxEnv {
             data: input.clone(),
             nonce: *nonce,
             chain_id: *chain_id,
-            chain_ids: None,
             ..Default::default()
         }
     }
@@ -108,7 +107,6 @@ impl FromRecoveredTx<TxEip2930> for TxEnv {
             chain_id: Some(*chain_id),
             nonce: *nonce,
             access_list: access_list.clone(),
-            chain_ids: None,
             ..Default::default()
         }
     }
@@ -148,7 +146,6 @@ impl FromRecoveredTx<TxEip1559> for TxEnv {
             chain_id: Some(*chain_id),
             gas_priority_fee: Some(*max_priority_fee_per_gas),
             access_list: access_list.clone(),
-            chain_ids: None,
             ..Default::default()
         }
     }
@@ -189,7 +186,6 @@ impl FromRecoveredTx<TxEip4844> for TxEnv {
             access_list: access_list.clone(),
             blob_hashes: blob_versioned_hashes.clone(),
             max_fee_per_blob_gas: *max_fee_per_blob_gas,
-            chain_ids: None,
             ..Default::default()
         }
     }
@@ -241,7 +237,6 @@ impl FromRecoveredTx<TxEip7702> for TxEnv {
                     ))
                 })
                 .collect(),
-            chain_ids: None,
             ..Default::default()
         }
     }
