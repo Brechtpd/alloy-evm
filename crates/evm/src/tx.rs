@@ -64,9 +64,8 @@ impl<T, TxEnv: FromRecoveredTx<T>> IntoTxEnv<TxEnv> for &Recovered<T> {
 
 impl FromRecoveredTx<TxLegacy> for TxEnv {
     fn from_recovered_tx(tx: &TxLegacy, caller: Address) -> Self {
-        let chain_ids = Some(vec![160010, 167010 , 167011]);
         let TxLegacy { chain_id, nonce, gas_price, gas_limit, to, value, input } = tx;
-        let resolved_chain_id = chain_id.unwrap_or(160010);
+        let resolved_chain_id = chain_id.unwrap_or(1);
         Self {
             tx_type: tx.ty(),
             caller: ChainAddress::new(resolved_chain_id, caller),
@@ -80,8 +79,7 @@ impl FromRecoveredTx<TxLegacy> for TxEnv {
             data: input.clone(),
             nonce: *nonce,
             chain_id: *chain_id,
-            //chain_ids: Some(vec![resolved_chain_id]),
-            chain_ids,
+            chain_ids: None,
             ..Default::default()
         }
     }
@@ -96,7 +94,6 @@ impl FromTxWithEncoded<TxLegacy> for TxEnv {
 impl FromRecoveredTx<TxEip2930> for TxEnv {
     fn from_recovered_tx(tx: &TxEip2930, caller: Address) -> Self {
         let TxEip2930 { chain_id, nonce, gas_price, gas_limit, to, value, access_list, input } = tx;
-        let chain_ids = Some(vec![160010, 167010 , 167011]);
         Self {
             tx_type: tx.ty(),
             caller: ChainAddress::new(*chain_id, caller),
@@ -111,8 +108,7 @@ impl FromRecoveredTx<TxEip2930> for TxEnv {
             chain_id: Some(*chain_id),
             nonce: *nonce,
             access_list: access_list.clone(),
-            //chain_ids: Some(vec![*chain_id]),
-            chain_ids,
+            chain_ids: None,
             ..Default::default()
         }
     }
@@ -137,7 +133,6 @@ impl FromRecoveredTx<TxEip1559> for TxEnv {
             max_priority_fee_per_gas,
             access_list,
         } = tx;
-        let chain_ids = Some(vec![160010, 167010 , 167011]);
         Self {
             tx_type: tx.ty(),
             caller: ChainAddress::new(*chain_id, caller),
@@ -153,8 +148,7 @@ impl FromRecoveredTx<TxEip1559> for TxEnv {
             chain_id: Some(*chain_id),
             gas_priority_fee: Some(*max_priority_fee_per_gas),
             access_list: access_list.clone(),
-            //chain_ids: Some(vec![*chain_id]),
-            chain_ids,
+            chain_ids: None,
             ..Default::default()
         }
     }
@@ -168,7 +162,6 @@ impl FromTxWithEncoded<TxEip1559> for TxEnv {
 
 impl FromRecoveredTx<TxEip4844> for TxEnv {
     fn from_recovered_tx(tx: &TxEip4844, caller: Address) -> Self {
-        let chain_ids = Some(vec![160010, 167010 , 167011]);
         let TxEip4844 {
             chain_id,
             nonce,
@@ -196,8 +189,7 @@ impl FromRecoveredTx<TxEip4844> for TxEnv {
             access_list: access_list.clone(),
             blob_hashes: blob_versioned_hashes.clone(),
             max_fee_per_blob_gas: *max_fee_per_blob_gas,
-            //chain_ids: Some(vec![*chain_id]),
-            chain_ids,
+            chain_ids: None,
             ..Default::default()
         }
     }
@@ -223,7 +215,6 @@ impl FromRecoveredTx<TxEip7702> for TxEnv {
             access_list,
             authorization_list,
         } = tx;
-        let chain_ids = Some(vec![160010, 167010 , 167011]);
         Self {
             tx_type: tx.ty(),
             caller: ChainAddress::new(*chain_id, caller),
@@ -250,8 +241,7 @@ impl FromRecoveredTx<TxEip7702> for TxEnv {
                     ))
                 })
                 .collect(),
-            //chain_ids: Some(vec![*chain_id]),
-            chain_ids,
+            chain_ids: None,
             ..Default::default()
         }
     }

@@ -118,6 +118,16 @@ where
         self.inner.ctx.cfg.chain_id
     }
 
+    fn transact(
+        &mut self,
+        tx: impl crate::IntoTxEnv<Self::Tx>,
+    ) -> Result<ResultAndState, Self::Error> {
+        let mut tx_env = tx.into_tx_env();
+        // TODO: eventually should be gotten from the tx somehow
+        tx_env.chain_ids = Some(self.blocks().keys().cloned().collect());
+        self.transact_raw(tx_env)
+    }
+
     fn transact_raw(&mut self, tx: Self::Tx) -> Result<ResultAndState, Self::Error> {
         if self.inspect {
             self.inner.set_tx(tx);
