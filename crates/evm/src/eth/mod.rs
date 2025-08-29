@@ -8,12 +8,12 @@ use core::{
     ops::{Deref, DerefMut},
 };
 use revm::{
-    primitives::{MultiChainTxKind as TxKind, HashMap},
+    primitives::{MultiChainTxKind as TxKind, HashMap, ChainAddress, hardfork::SpecId},
     context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
     context_interface::result::{EVMError, HaltReason, ResultAndState},
     handler::{instructions::EthInstructions, EthPrecompiles, PrecompileProvider},
     inspector::NoOpInspector, interpreter::{interpreter::EthInterpreter, InterpreterResult},
-    precompile::{PrecompileSpecId, Precompiles}, primitives::{hardfork::SpecId, ChainAddress},
+    precompile::{PrecompileSpecId, Precompiles},
     Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext
 };
 
@@ -123,20 +123,25 @@ where
         tx: impl crate::IntoTxEnv<Self::Tx>,
     ) -> Result<ResultAndState, Self::Error> {
         let mut tx_env = tx.into_tx_env();
-        println!("tx_env.chain_id: {:?}", tx_env.chain_id);
-        // For legacy transactions defaulting to chain_id == 1, when they shouldn't
+
+        // For legacy transactions without a chain_id, use the default from config
         if tx_env.chain_id.is_none() {
-            println!("self.cfg.parent_chain_id: {:?}", self.cfg.parent_chain_id);
-            println!("self.cfg.chain_id: {:?}", self.cfg.chain_id);
-            if self.cfg.parent_chain_id.is_some() {
-                tx_env.chain_id = self.cfg.parent_chain_id;
+            let default_chain_id = if let Some(parent_chain_id) = self.cfg.parent_chain_id {
+                parent_chain_id
             } else {
-                tx_env.chain_id = Some(self.cfg.chain_id);
+                self.cfg.chain_id
+            };
+            tx_env.chain_id = Some(default_chain_id);
+
+            // Also update the caller and call addresses
+            tx_env.caller = ChainAddress::new(default_chain_id, tx_env.caller.1);
+            if let TxKind::Call(ref mut addr) = tx_env.kind {
+                *addr = ChainAddress::new(default_chain_id, addr.1);
             }
         }
-        // TODO: eventually should be gotten from the tx somehow
+
+        // Set chain_ids from available blocks
         tx_env.chain_ids = Some(self.blocks().keys().cloned().collect());
-        println!("tx_env.chain_ids: {:?}", tx_env.chain_ids);
         self.transact_raw(tx_env)
     }
 
