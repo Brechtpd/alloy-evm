@@ -11,7 +11,7 @@ extern crate alloc;
 
 pub mod block;
 pub mod evm;
-pub use evm::{Database, Evm, EvmFactory};
+pub use evm::{Evm, EvmFactory, MultiDatabase};
 pub mod eth;
 pub use eth::{EthEvm, EthEvmFactory};
 pub mod env;
@@ -31,7 +31,8 @@ pub mod tracing;
 
 mod either;
 
-// re-export revm and op-revm
-#[cfg(feature = "op")]
-pub use op_revm;
+// re-export revm
+// op-revm disabled due to incompatibility with HashMap<u64, BlockEnv>
+// #[cfg(feature = "op")]
+// pub use op_revm;
 pub use revm;

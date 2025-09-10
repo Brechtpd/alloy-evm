@@ -3,9 +3,9 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.20.1"
+version = "0.10.0"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.85"
 authors = ["Alloy Contributors"]
 license = "MIT OR Apache-2.0"
 homepage = "https://github.com/alloy-rs/alloy-evm"
@@ -35,8 +35,8 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [workspace.dependencies]
-alloy-evm = { version = "0.20.1", path = "crates/evm", default-features = false }
-alloy-op-evm = { version = "0.20.1", path = "crates/op-evm", default-features = false }
+alloy-evm = { version = "0.10.0", path = "crates/evm", default-features = false }
+alloy-op-evm = { version = "0.10.0", path = "crates/op-evm", default-features = false }
 
 # alloy
 alloy-eip2124 = { version = "0.2", default-features = false }
@@ -45,16 +45,15 @@ alloy-eips = { version = "1.0", default-features = false }
 alloy-consensus = { version = "1.0.0", default-features = false }
 alloy-primitives = { version = "1.0.0", default-features = false }
 alloy-sol-types = { version = "1.0.0", default-features = false }
-alloy-hardforks = { version = "0.3" }
-alloy-rpc-types-eth = { version = "1.0.0", default-features = false }
+alloy-hardforks = { version = "0.2" }
 
 # op-alloy
-alloy-op-hardforks = { version = "0.3" }
-op-alloy-consensus = { version = "0.19", default-features = false }
+alloy-op-hardforks = { version = "0.2" }
+op-alloy-consensus = { version = "0.17", default-features = false }
 
 # revm
-revm = { version = "29.0.0", default-features = false }
-op-revm = { version = "10.0.0", default-features = false }
+revm = { git = "https://github.com/taikoxyz/revm-private", branch = "v75-gwyneth-claude", default-features = false }
+# op-revm = { git = "https://github.com/taikoxyz/revm-private", branch = "v75-gwyneth-claude", default-features = false } # Disabled - incompatible with multi-chain architecture
 
 # misc
 auto_impl = "1"
@@ -62,7 +61,3 @@ derive_more = { version = "2", default-features = false, features = ["full"] }
 serde = { version = "1", default-features = false, features = ["derive"] }
 thiserror = { version = "2.0.0", default-features = false }
 serde_json = "1"
-
-#[patch.crates-io]
-#revm = { git = "https://github.com/bluealloy/revm", rev = "11b16259" }
-#op-revm = { git = "https://github.com/bluealloy/revm", rev = "11b16259" }
