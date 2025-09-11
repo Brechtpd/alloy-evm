@@ -5,7 +5,7 @@
 //! of these traits is to enable flexible transaction input while maintaining type safety.
 
 use alloy_consensus::{
-    crypto::secp256k1, transaction::Recovered, EthereumTxEnvelope, TxEip1559, TxEip2930, TxEip4844,
+    crypto::secp256k1, transaction::Recovered, EthereumTxEnvelope, TxEnvelope, TxEip1559, TxEip2930, TxEip4844,
     TxEip7702, TxLegacy,
 };
 use alloy_eips::{
@@ -465,6 +465,8 @@ impl<Eip4844: AsRef<TxEip4844>> FromRecoveredTx<EthereumTxEnvelope<Eip4844>> for
         }
     }
 }
+
+
 
 #[cfg(feature = "op")]
 mod op {

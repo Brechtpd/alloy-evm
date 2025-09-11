@@ -49,10 +49,25 @@ dependencies = [
  "either",
  "k256",
  "once_cell",
- "secp256k1",
+ "rand 0.8.5",
+ "secp256k1 0.30.0",
  "serde",
  "serde_with",
  "thiserror",
+]
+
+[[package]]
+name = "alloy-consensus-any"
+version = "1.0.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b5659581e41e8fe350ecc3593cb5c9dcffddfd550896390f2b78a07af67b0fa"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-serde",
+ "serde",
 ]
 
 [[package]]
@@ -120,6 +135,7 @@ dependencies = [
  "alloy-eips",
  "alloy-hardforks",
  "alloy-primitives",
+ "alloy-rpc-types-eth",
  "alloy-sol-types",
  "auto_impl",
  "derive_more",
@@ -155,28 +171,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "alloy-op-evm"
-version = "0.10.0"
+name = "alloy-network-primitives"
+version = "1.0.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80d7980333dd9391719756ac28bc2afa9baa705fc70ffd11dc86ab078dd64477"
 dependencies = [
  "alloy-consensus",
  "alloy-eips",
- "alloy-evm",
- "alloy-op-hardforks",
  "alloy-primitives",
- "auto_impl",
- "op-alloy-consensus",
- "revm",
-]
-
-[[package]]
-name = "alloy-op-hardforks"
-version = "0.2.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3417f4187eaf7f7fb0d7556f0197bca26f0b23c4bb3aca0c9d566dc1c5d727a2"
-dependencies = [
- "alloy-chains",
- "alloy-hardforks",
- "auto_impl",
+ "alloy-serde",
+ "serde",
 ]
 
 [[package]]
@@ -226,6 +230,27 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
+]
+
+[[package]]
+name = "alloy-rpc-types-eth"
+version = "1.0.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b777b98526bbe5b7892ca22a7fd5f18ed624ff664a79f40d0f9f2bf94ba79a84"
+dependencies = [
+ "alloy-consensus",
+ "alloy-consensus-any",
+ "alloy-eips",
+ "alloy-network-primitives",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-serde",
+ "alloy-sol-types",
+ "itertools 0.13.0",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "thiserror",
 ]
 
 [[package]]
@@ -654,6 +679,9 @@ name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "aurora-engine-modexp"
@@ -681,6 +709,12 @@ name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
+
+[[package]]
+name = "az"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b7e4c2464d97fe331d41de9d5db0def0a96f4d823b8b32a2efd503578988973"
 
 [[package]]
 name = "base16ct"
@@ -1097,6 +1131,7 @@ dependencies = [
  "digest 0.10.7",
  "elliptic-curve",
  "rfc6979",
+ "serdect",
  "signature",
  "spki",
 ]
@@ -1118,6 +1153,9 @@ name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "elliptic-curve"
@@ -1134,6 +1172,7 @@ dependencies = [
  "pkcs8",
  "rand_core 0.6.4",
  "sec1",
+ "serdect",
  "subtle",
  "zeroize",
 ]
@@ -1281,6 +1320,16 @@ name = "glob"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
+
+[[package]]
+name = "gmp-mpfr-sys"
+version = "1.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60f8970a75c006bb2f8ae79c6768a116dd215fa8346a87aed99bf9d82ca43394"
+dependencies = [
+ "libc",
+ "windows-sys 0.60.2",
+]
 
 [[package]]
 name = "group"
@@ -1465,6 +1514,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "once_cell",
+ "serdect",
  "sha2 0.10.9",
 ]
 
@@ -1978,6 +2028,7 @@ dependencies = [
  "libc",
  "rand_chacha 0.3.1",
  "rand_core 0.6.4",
+ "serde",
 ]
 
 [[package]]
@@ -2067,8 +2118,7 @@ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
 
 [[package]]
 name = "revm"
-version = "24.0.1"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "29.0.0"
 dependencies = [
  "revm-bytecode",
  "revm-context",
@@ -2085,11 +2135,9 @@ dependencies = [
 
 [[package]]
 name = "revm-bytecode"
-version = "4.0.1"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "6.2.2"
 dependencies = [
  "bitvec",
- "once_cell",
  "phf",
  "revm-primitives",
  "serde",
@@ -2097,9 +2145,9 @@ dependencies = [
 
 [[package]]
 name = "revm-context"
-version = "5.0.1"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "9.0.2"
 dependencies = [
+ "bitvec",
  "cfg-if",
  "derive-where",
  "revm-bytecode",
@@ -2113,13 +2161,13 @@ dependencies = [
 
 [[package]]
 name = "revm-context-interface"
-version = "5.0.0"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "10.1.0"
 dependencies = [
  "alloy-eip2930",
  "alloy-eip7702",
  "auto_impl",
  "either",
+ "revm-bytecode",
  "revm-database-interface",
  "revm-primitives",
  "revm-state",
@@ -2128,8 +2176,7 @@ dependencies = [
 
 [[package]]
 name = "revm-database"
-version = "4.0.1"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "7.0.5"
 dependencies = [
  "alloy-eips",
  "revm-bytecode",
@@ -2141,10 +2188,10 @@ dependencies = [
 
 [[package]]
 name = "revm-database-interface"
-version = "4.0.1"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "7.0.5"
 dependencies = [
  "auto_impl",
+ "either",
  "revm-primitives",
  "revm-state",
  "serde",
@@ -2152,10 +2199,10 @@ dependencies = [
 
 [[package]]
 name = "revm-handler"
-version = "5.0.1"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "10.0.0"
 dependencies = [
  "auto_impl",
+ "derive-where",
  "revm-bytecode",
  "revm-context",
  "revm-context-interface",
@@ -2170,11 +2217,12 @@ dependencies = [
 
 [[package]]
 name = "revm-inspector"
-version = "5.0.1"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "10.0.0"
 dependencies = [
  "auto_impl",
+ "either",
  "revm-context",
+ "revm-context-interface",
  "revm-database-interface",
  "revm-handler",
  "revm-interpreter",
@@ -2186,8 +2234,7 @@ dependencies = [
 
 [[package]]
 name = "revm-interpreter"
-version = "20.0.0"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "25.0.2"
 dependencies = [
  "revm-bytecode",
  "revm-context-interface",
@@ -2197,41 +2244,41 @@ dependencies = [
 
 [[package]]
 name = "revm-precompile"
-version = "21.0.0"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "27.0.0"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
  "ark-ec",
  "ark-ff 0.5.0",
  "ark-serialize 0.5.0",
+ "arrayref",
  "aurora-engine-modexp",
  "c-kzg",
  "cfg-if",
  "k256",
  "libsecp256k1",
- "once_cell",
  "p256",
  "revm-primitives",
  "ripemd",
- "secp256k1",
+ "rug",
+ "secp256k1 0.31.1",
  "sha2 0.10.9",
 ]
 
 [[package]]
 name = "revm-primitives"
-version = "19.1.0"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "20.2.1"
 dependencies = [
  "alloy-primitives",
+ "alloy-sol-types",
  "num_enum",
+ "once_cell",
  "serde",
 ]
 
 [[package]]
 name = "revm-state"
-version = "4.0.1"
-source = "git+https://github.com/taikoxyz/revm-private?branch=v75-gwyneth-claude#fe75936d6ff1cd1fd783037c5e0be2632b921642"
+version = "7.0.5"
 dependencies = [
  "bitflags",
  "revm-bytecode",
@@ -2266,6 +2313,18 @@ checksum = "bb919243f34364b6bd2fc10ef797edbfa75f33c252e7998527479c6d6b47e1ec"
 dependencies = [
  "bytes",
  "rustc-hex",
+]
+
+[[package]]
+name = "rug"
+version = "1.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "58ad2e973fe3c3214251a840a621812a4f40468da814b1a3d6947d433c2af11f"
+dependencies = [
+ "az",
+ "gmp-mpfr-sys",
+ "libc",
+ "libm",
 ]
 
 [[package]]
@@ -2402,6 +2461,7 @@ dependencies = [
  "der",
  "generic-array",
  "pkcs8",
+ "serdect",
  "subtle",
  "zeroize",
 ]
@@ -2414,7 +2474,19 @@ checksum = "b50c5943d326858130af85e049f2661ba3c78b26589b8ab98e65e80ae44a1252"
 dependencies = [
  "bitcoin_hashes",
  "rand 0.8.5",
- "secp256k1-sys",
+ "secp256k1-sys 0.10.1",
+ "serde",
+]
+
+[[package]]
+name = "secp256k1"
+version = "0.31.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c3c81b43dc2d8877c216a3fccf76677ee1ebccd429566d3e67447290d0c42b2"
+dependencies = [
+ "bitcoin_hashes",
+ "rand 0.9.2",
+ "secp256k1-sys 0.11.0",
 ]
 
 [[package]]
@@ -2422,6 +2494,15 @@ name = "secp256k1-sys"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4387882333d3aa8cb20530a17c69a3752e97837832f34f6dccc760e715001d9"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "secp256k1-sys"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dcb913707158fadaf0d8702c2db0e857de66eb003ccfdda5924b5f5ac98efb38"
 dependencies = [
  "cc",
 ]
@@ -2516,6 +2597,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serdect"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a84f14a19e9a014bb9f4512488d9829a68e04ecabffb0f9904cd1ace94598177"
+dependencies = [
+ "base16ct",
+ "serde",
+]
+
+[[package]]
 name = "sha2"
 version = "0.9.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2586,6 +2677,9 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "spki"

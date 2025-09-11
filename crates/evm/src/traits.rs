@@ -1,14 +1,14 @@
 //! EVM traits.
 
-use crate::Database;
 use alloc::boxed::Box;
 use alloy_primitives::{Address, Log, B256, U256};
 use core::{error::Error, fmt, fmt::Debug};
 use revm::{
     context::{Block, DBErrorMarker, JournalTr},
     interpreter::{SStoreResult, StateLoad},
-    primitives::{StorageKey, StorageValue},
+    primitives::{ChainAddress, StorageKey, StorageValue},
     state::{Account, AccountInfo, Bytecode},
+    Database,
 };
 
 /// Erased error type.
@@ -82,6 +82,7 @@ struct EvmInternalsImpl<'a, T>(&'a mut T);
 impl<T> revm::Database for EvmInternalsImpl<'_, T>
 where
     T: JournalTr<Database: Database>,
+    <T::Database as Database>::Error: Send + Sync + 'static,
 {
     type Error = ErasedError;
 
@@ -109,19 +110,25 @@ where
 impl<T> EvmInternalsTr for EvmInternalsImpl<'_, T>
 where
     T: JournalTr<Database: Database> + Debug,
+    <T::Database as Database>::Error: Send + Sync + 'static,
+    <T::Database as revm::database_interface::MultiChainDatabase>::Error: Send + Sync + 'static,
 {
     fn load_account(
         &mut self,
         address: Address,
     ) -> Result<StateLoad<&mut Account>, EvmInternalsError> {
-        self.0.load_account(address).map_err(EvmInternalsError::database)
+        // Use default chain_id 0 for legacy compatibility
+        let chain_address = ChainAddress::new(0, address);
+        self.0.load_account(chain_address).map_err(EvmInternalsError::database)
     }
 
     fn load_account_code(
         &mut self,
         address: Address,
     ) -> Result<StateLoad<&mut Account>, EvmInternalsError> {
-        self.0.load_account_code(address).map_err(EvmInternalsError::database)
+        // Use default chain_id 0 for legacy compatibility
+        let chain_address = ChainAddress::new(0, address);
+        self.0.load_account_code(chain_address).map_err(EvmInternalsError::database)
     }
 
     fn sload(
@@ -129,15 +136,21 @@ where
         address: Address,
         key: StorageKey,
     ) -> Result<StateLoad<StorageValue>, EvmInternalsError> {
-        self.0.sload(address, key).map_err(EvmInternalsError::database)
+        // Use default chain_id 0 for legacy compatibility
+        let chain_address = ChainAddress::new(0, address);
+        self.0.sload(chain_address, key).map_err(EvmInternalsError::database)
     }
 
     fn touch_account(&mut self, address: Address) {
-        self.0.touch_account(address);
+        // Use default chain_id 0 for legacy compatibility
+        let chain_address = ChainAddress::new(0, address);
+        self.0.touch_account(chain_address);
     }
 
     fn set_code(&mut self, address: Address, code: Bytecode) {
-        self.0.set_code(address, code);
+        // Use default chain_id 0 for legacy compatibility
+        let chain_address = ChainAddress::new(0, address);
+        self.0.set_code(chain_address, code);
     }
 
     fn sstore(
@@ -146,7 +159,9 @@ where
         key: StorageKey,
         value: StorageValue,
     ) -> Result<StateLoad<SStoreResult>, EvmInternalsError> {
-        self.0.sstore(address, key, value).map_err(EvmInternalsError::database)
+        // Use default chain_id 0 for legacy compatibility
+        let chain_address = ChainAddress::new(0, address);
+        self.0.sstore(chain_address, key, value).map_err(EvmInternalsError::database)
     }
 
     fn log(&mut self, log: Log) {
@@ -165,6 +180,8 @@ impl<'a> EvmInternals<'a> {
     pub fn new<T>(journal: &'a mut T, block_env: &'a dyn Block) -> Self
     where
         T: JournalTr<Database: Database> + Debug,
+        <T::Database as Database>::Error: Send + Sync + 'static,
+        <T::Database as revm::database_interface::MultiChainDatabase>::Error: Send + Sync + 'static,
     {
         Self { internals: Box::new(EvmInternalsImpl(journal)), block_env }
     }

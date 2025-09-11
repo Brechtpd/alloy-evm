@@ -180,22 +180,24 @@ pub trait BlockExecutor {
 pub trait BlockExecutorFor<'a, F: BlockExecutorFactory + ?Sized, DB, I = NoOpInspector>
 where
     Self: BlockExecutor<
-        Evm = <F::EvmFactory as EvmFactory>::Evm<&'a mut State<DB>, I>,
+        Evm = <F::EvmFactory as EvmFactory<&'a mut State<DB>>>::Evm<I>,
         Transaction = F::Transaction,
         Receipt = F::Receipt,
     >,
+    F::EvmFactory: EvmFactory<&'a mut State<DB>>,
     DB: MultiDatabase + 'a,
-    I: Inspector<<F::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>> + 'a,
+    I: Inspector<<F::EvmFactory as EvmFactory<&'a mut State<DB>>>::Context<'a>> + 'a,
 {
 }
 
 impl<'a, F, DB, I, T> BlockExecutorFor<'a, F, DB, I> for T
 where
     F: BlockExecutorFactory,
+    F::EvmFactory: EvmFactory<&'a mut State<DB>>,
     DB: MultiDatabase + 'a,
-    I: Inspector<<F::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>> + 'a,
+    I: Inspector<<F::EvmFactory as EvmFactory<&'a mut State<DB>>>::Context<'a>> + 'a,
     T: BlockExecutor<
-        Evm = <F::EvmFactory as EvmFactory>::Evm<&'a mut State<DB>, I>,
+        Evm = <F::EvmFactory as EvmFactory<&'a mut State<DB>>>::Evm<I>,
         Transaction = F::Transaction,
         Receipt = F::Receipt,
     >,
@@ -214,7 +216,6 @@ where
 /// For more context on the executor design, see the documentation for [`BlockExecutor`].
 ///
 /// [`ExecutionCtx`]: BlockExecutorFactory::ExecutionCtx
-#[auto_impl::auto_impl(Arc)]
 pub trait BlockExecutorFactory: 'static {
     /// The EVM factory used by the executor.
     type EvmFactory: EvmFactory;
@@ -234,13 +235,22 @@ pub trait BlockExecutorFactory: 'static {
     /// Reference to EVM factory used by the executor.
     fn evm_factory(&self) -> &Self::EvmFactory;
 
+    /// Type of executor returned by create_executor
+    type Executor<'a, DB, I>: BlockExecutor<Transaction = Self::Transaction, Receipt = Self::Receipt> + 'a
+    where
+        Self: 'a,
+        DB: MultiDatabase + 'a;
+
     /// Creates an executor with given EVM and execution context.
+    /// 
+    /// Note: Due to limitations in Rust's type system with associated types,
+    /// implementations may need to use unsafe code to cast the EVM type.
     fn create_executor<'a, DB, I>(
         &'a self,
-        evm: <Self::EvmFactory as EvmFactory>::Evm<&'a mut State<DB>, I>,
+        evm: <Self::EvmFactory as EvmFactory<&'a mut State<DB>>>::Evm<I>,
         ctx: HashMap<u64, Self::ExecutionCtx<'a>>,
-    ) -> impl BlockExecutorFor<'a, Self, DB, I>
+    ) -> Self::Executor<'a, DB, I>
     where
-        DB: MultiDatabase + 'a,
-        I: Inspector<<Self::EvmFactory as EvmFactory>::Context<&'a mut State<DB>>> + 'a;
+        Self::EvmFactory: EvmFactory<&'a mut State<DB>>,
+        DB: MultiDatabase + 'a;
 }

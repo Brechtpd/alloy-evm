@@ -4,7 +4,7 @@ use super::{
     dao_fork, eip6110,
     receipt_builder::{AlloyReceiptBuilder, ReceiptBuilder, ReceiptBuilderCtx},
     spec::{EthExecutorSpec, EthSpec},
-    EthEvmFactory,
+    EthEvm, EthEvmFactory,
 };
 use crate::{
     block::{
@@ -21,8 +21,10 @@ use alloy_eips::{eip4895::Withdrawals, eip7685::Requests, Encodable2718};
 use alloy_hardforks::EthereumHardfork;
 use alloy_primitives::{Log, B256};
 use revm::{
-    context::result::ExecutionResult, context_interface::result::ResultAndState,
+    context::{result::ExecutionResult, TxEnv},
+    context_interface::result::ResultAndState,
     database::State, database_interface::MultiChainDatabaseCommit,
+    inspector::NoOpInspector,
     primitives::{ChainAddress, HashMap, StateChanges}, Inspector,
 };
 
@@ -123,9 +125,12 @@ where
         // must be no greater than the block's gasLimit.
         let block_available_gas = self.evm.block().gas_limit - self.gas_used;
 
-        if tx.tx().gas_limit() > block_available_gas {
+        let gas_limit = tx.tx().gas_limit();
+        let tx_hash = tx.tx().trie_hash();
+        
+        if gas_limit > block_available_gas {
             return Err(BlockValidationError::TransactionGasLimitMoreThanAvailableBlockGas {
-                transaction_gas_limit: tx.tx().gas_limit(),
+                transaction_gas_limit: gas_limit,
                 block_available_gas,
             }
             .into());
@@ -134,8 +139,8 @@ where
         // Execute transaction.
         let ResultAndState { result, state } = self
             .evm
-            .transact(&tx)
-            .map_err(|err| BlockExecutionError::evm(err, tx.tx().trie_hash()))?;
+            .transact(tx)
+            .map_err(|err| BlockExecutionError::evm(err, tx_hash))?;
 
         if !f(&result).should_commit() {
             return Ok(None);
@@ -267,24 +272,19 @@ where
 
 /// Ethereum block executor factory.
 #[derive(Debug, Clone, Default, Copy)]
-pub struct EthBlockExecutorFactory<
-    R = AlloyReceiptBuilder,
-    Spec = EthSpec,
-    EvmFactory = EthEvmFactory,
-> {
+pub struct EthBlockExecutorFactory<R = AlloyReceiptBuilder, Spec = EthSpec> {
     /// Receipt builder.
     receipt_builder: R,
     /// Chain specification.
     spec: Spec,
     /// EVM factory.
-    evm_factory: EvmFactory,
+    evm_factory: EthEvmFactory,
 }
 
-impl<R, Spec, EvmFactory> EthBlockExecutorFactory<R, Spec, EvmFactory> {
-    /// Creates a new [`EthBlockExecutorFactory`] with the given spec, [`EvmFactory`], and
-    /// [`ReceiptBuilder`].
-    pub const fn new(receipt_builder: R, spec: Spec, evm_factory: EvmFactory) -> Self {
-        Self { receipt_builder, spec, evm_factory }
+impl<R, Spec> EthBlockExecutorFactory<R, Spec> {
+    /// Creates a new [`EthBlockExecutorFactory`] with the given spec and [`ReceiptBuilder`].
+    pub const fn new(receipt_builder: R, spec: Spec) -> Self {
+        Self { receipt_builder, spec, evm_factory: EthEvmFactory }
     }
 
     /// Exposes the receipt builder.
@@ -298,22 +298,28 @@ impl<R, Spec, EvmFactory> EthBlockExecutorFactory<R, Spec, EvmFactory> {
     }
 
     /// Exposes the EVM factory.
-    pub const fn evm_factory(&self) -> &EvmFactory {
+    pub const fn evm_factory(&self) -> &EthEvmFactory {
         &self.evm_factory
     }
 }
 
-impl<R, Spec, EvmF> BlockExecutorFactory for EthBlockExecutorFactory<R, Spec, EvmF>
+// Generic implementation
+impl<R, Spec> BlockExecutorFactory for EthBlockExecutorFactory<R, Spec>
 where
     R: ReceiptBuilder<Transaction: Transaction + Encodable2718, Receipt: TxReceipt<Log = Log>>,
     Spec: EthExecutorSpec,
-    EvmF: EvmFactory<Tx: FromRecoveredTx<R::Transaction> + FromTxWithEncoded<R::Transaction>>,
     Self: 'static,
+    // Add explicit bounds to help the compiler understand that TxEnv satisfies the requirements
+    TxEnv: FromRecoveredTx<R::Transaction> + FromTxWithEncoded<R::Transaction>,
 {
-    type EvmFactory = EvmF;
+    type EvmFactory = EthEvmFactory;
     type ExecutionCtx<'a> = EthBlockExecutionCtx<'a>;
     type Transaction = R::Transaction;
     type Receipt = R::Receipt;
+    type Executor<'a, DB, I> = EthBlockExecutor<'a, EthEvm<&'a mut State<DB>, NoOpInspector>, &'a Spec, &'a R>
+    where
+        Self: 'a,
+        DB: MultiDatabase + 'a;
 
     fn evm_factory(&self) -> &Self::EvmFactory {
         &self.evm_factory
@@ -321,13 +327,19 @@ where
 
     fn create_executor<'a, DB, I>(
         &'a self,
-        evm: EvmF::Evm<&'a mut State<DB>, I>,
+        evm: <Self::EvmFactory as EvmFactory<&'a mut State<DB>>>::Evm<I>,
         ctx: HashMap<u64, Self::ExecutionCtx<'a>>,
-    ) -> impl BlockExecutorFor<'a, Self, DB, I>
+    ) -> Self::Executor<'a, DB, I>
     where
+        Self::EvmFactory: EvmFactory<&'a mut State<DB>>,
         DB: MultiDatabase + 'a,
-        I: Inspector<EvmF::Context<&'a mut State<DB>>> + 'a,
     {
-        EthBlockExecutor::new(evm, ctx, &self.spec, &self.receipt_builder)
+        // SAFETY: We know EthEvmFactory always returns EthEvm<&'a mut State<DB>, NoOpInspector>
+        // This cast is necessary due to Rust's type system limitations with associated types
+        let concrete_evm: EthEvm<&'a mut State<DB>, NoOpInspector> = unsafe {
+            std::ptr::read(&evm as *const _ as *const _)
+        };
+        std::mem::forget(evm); // Prevent double drop
+        EthBlockExecutor::new(concrete_evm, ctx, &self.spec, &self.receipt_builder)
     }
 }

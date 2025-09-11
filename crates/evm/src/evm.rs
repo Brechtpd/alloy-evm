@@ -1,18 +1,16 @@
 //! Abstraction over EVM.
 
 use crate::{tracing::TxTracer, EvmEnv, EvmError, IntoTxEnv};
-use alloy_primitives::{Address, Bytes};
+use alloy_primitives::Bytes;
 use core::{error::Error, fmt::Debug, hash::Hash};
 use revm::{
     context::{result::ExecutionResult, BlockEnv}, 
     context_interface::{
         result::{HaltReasonTr, ResultAndState},
-        ContextTr,
     }, 
     database_interface::{MultiChainDatabase, MultiChainDatabaseCommit}, 
-    inspector::{JournalExt, NoOpInspector}, 
-    primitives::{ChainAddress, HashMap}, 
-    Inspector
+    inspector::NoOpInspector, 
+    primitives::{ChainAddress, HashMap},
 };
 
 /// Helper trait to bound [`MultiChainDatabase::Error`] with common requirements.
@@ -177,9 +175,7 @@ pub trait IntoTracer {
 /// Factory for creating EVM instances.
 pub trait EvmFactory<DB = (), R = ()> {
     /// The EVM type produced by this factory.
-    type Evm<I>: Evm
-    where
-        I: Inspector<ContextTr<DB = DB>, JournalState: JournalExt>;
+    type Evm<I>: Evm;
 
     /// Additional data required by the `BlockExecutor`.
     type Context<'a>;
@@ -191,14 +187,14 @@ pub trait EvmFactory<DB = (), R = ()> {
     type Transaction;
 
     /// Create EVM instance.
-    fn create_evm<I>(&self, db: DB, env: EvmEnv<Self::Hardforks>, inspector: I) -> Self::Evm<I>
-    where
-        I: Inspector<ContextTr<DB = DB>, JournalState: JournalExt>;
+    fn create_evm<I>(&self, db: DB, env: EvmEnv<Self::Hardforks>, inspector: I) -> Self::Evm<I>;
 
     /// Create EVM instance with TX tracer.
-    fn create_evm_with_tracer<T>(&self, db: DB, env: EvmEnv<Self::Hardforks>, tracer: T) -> TxTracer<T>
+    fn create_evm_with_tracer<T>(&self, db: DB, env: EvmEnv<Self::Hardforks>, tracer: T) -> TxTracer<Self::Evm<T>>
     where
-        T: Inspector<ContextTr<DB = DB>, JournalState: JournalExt>,
+        Self::Evm<T>: Evm,
+        <Self::Evm<T> as Evm>::Inspector: Clone,
+        <Self::Evm<T> as Evm>::DB: MultiChainDatabaseCommit,
     {
         TxTracer::new(self.create_evm(db, env, tracer))
     }

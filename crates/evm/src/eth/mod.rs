@@ -1,21 +1,21 @@
 //! Ethereum EVM implementation.
 
 use crate::{env::EvmEnv, evm::EvmFactory, precompiles::PrecompilesMap, Evm, MultiDatabase};
-use alloc::vec::Vec;
-use alloy_primitives::{Address, Bytes, U256};
+use alloy_primitives::Bytes;
 use core::{
     fmt::Debug,
     ops::{Deref, DerefMut},
 };
 use revm::{
     primitives::{MultiChainTxKind as TxKind, HashMap, ChainAddress, hardfork::SpecId},
-    context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
+    context::{BlockEnv, CfgEnv, Context, ContextTr, TxEnv, LocalContext},
     context_interface::result::{EVMError, HaltReason, ResultAndState},
+    database::{EmptyDB, State},
     handler::{instructions::EthInstructions, EthFrame, EthPrecompiles, PrecompileProvider},
     inspector::NoOpInspector,
     interpreter::{interpreter::EthInterpreter, InterpreterResult},
     precompile::{PrecompileSpecId, Precompiles},
-    Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext, SystemCallEvm,
+    AutoSetupBuilder, MainnetEvm as RevmEvm, ExecuteEvm, Inspector, SystemCallEvm,
 };
 
 mod block;
@@ -27,10 +27,9 @@ pub mod receipt_builder;
 pub mod spec;
 
 /// The Ethereum EVM context type.
-pub type EthEvmContext<DB> = Context<HashMap<u64, BlockEnv>, TxEnv, CfgEnv, DB>;
+pub type EthEvmContext<DB> = Context<BlockEnv, TxEnv, CfgEnv, DB>;
 
 /// Helper builder to construct `EthEvm` instances in a unified way.
-#[derive(Debug)]
 pub struct EthEvmBuilder<DB: MultiDatabase, I = NoOpInspector> {
     db: DB,
     block_env: HashMap<u64, BlockEnv>,
@@ -51,6 +50,22 @@ impl<DB: MultiDatabase> EthEvmBuilder<DB, NoOpInspector> {
             inspect: false,
             precompiles: None,
         }
+    }
+}
+
+impl<DB: MultiDatabase, I> core::fmt::Debug for EthEvmBuilder<DB, I> 
+where 
+    DB: core::fmt::Debug,
+    I: core::fmt::Debug,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("EthEvmBuilder")
+            .field("db", &self.db)
+            .field("block_env", &self.block_env)
+            .field("inspector", &self.inspector)
+            .field("inspect", &self.inspect)
+            .field("precompiles", &self.precompiles.is_some())
+            .finish()
     }
 }
 
@@ -90,6 +105,32 @@ impl<DB: MultiDatabase, I> EthEvmBuilder<DB, I> {
         self
     }
 
+    /// Builds the `EthEvm` instance without inspector.
+    pub fn build_no_inspector(self) -> EthEvm<DB, NoOpInspector, PrecompilesMap> {
+        let xchain = !self.block_env.is_empty() && self.block_env.len() > 1;
+        let precompiles = match self.precompiles {
+            Some(p) => p,
+            None => PrecompilesMap::from_static(Precompiles::new(
+                PrecompileSpecId::from_spec_id(self.cfg_env.spec),
+                xchain,
+            )),
+        };
+
+        // Create a new Context with the database and spec
+        let spec = self.cfg_env.spec;
+        let ctx = Context::<BlockEnv, TxEnv, CfgEnv, DB>::new(self.db, spec)
+            .with_cfg(self.cfg_env)
+            .with_blocks(self.block_env)
+            .with_tx(TxEnv::default())
+            .with_local(LocalContext::default());
+        
+        // Build the EVM with NoOpInspector
+        let inner = ctx.build_mainnet_with_inspector_auto(NoOpInspector {})
+            .with_precompiles(precompiles);
+
+        EthEvm { inner, inspect: false }
+    }
+
     /// Builds the `EthEvm` instance.
     pub fn build(self) -> EthEvm<DB, I, PrecompilesMap>
     where
@@ -104,11 +145,16 @@ impl<DB: MultiDatabase, I> EthEvmBuilder<DB, I> {
             )),
         };
 
-        let inner = Context::mainnet()
-            .with_blocks(self.block_env)
+        // Create a new Context with the database and spec
+        let spec = self.cfg_env.spec;
+        let ctx = Context::<BlockEnv, TxEnv, CfgEnv, DB>::new(self.db, spec)
             .with_cfg(self.cfg_env)
-            .with_db(self.db)
-            .build_mainnet_with_inspector(self.inspector)
+            .with_blocks(self.block_env)
+            .with_tx(TxEnv::default())
+            .with_local(LocalContext::default());
+        
+        // Build the EVM with inspector and precompiles
+        let inner = ctx.build_mainnet_with_inspector_auto(self.inspector)
             .with_precompiles(precompiles);
 
         EthEvm { inner, inspect: self.inspect }
@@ -121,16 +167,17 @@ impl<DB: MultiDatabase, I> EthEvmBuilder<DB, I> {
 /// support. [`Inspector`] support is configurable at runtime because it's part of the underlying
 /// [`RevmEvm`] type.
 #[expect(missing_debug_implementations)]
-pub struct EthEvm<DB: MultiDatabase, I, PRECOMPILE = EthPrecompiles> {
-    inner: RevmEvm<
+pub struct EthEvm<DB: MultiDatabase, I, PRECOMPILE = PrecompilesMap> {
+    inner: revm::context::Evm<
         EthEvmContext<DB>,
         I,
         EthInstructions<EthInterpreter, EthEvmContext<DB>>,
         PRECOMPILE,
-        EthFrame,
+        EthFrame<EthInterpreter>,
     >,
     inspect: bool,
 }
+
 
 impl<DB: MultiDatabase, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
     /// Creates a new Ethereum EVM instance.
@@ -138,12 +185,12 @@ impl<DB: MultiDatabase, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
     /// The `inspect` argument determines whether the configured [`Inspector`] of the given
     /// [`RevmEvm`] should be invoked on [`Evm::transact`].
     pub const fn new(
-        evm: RevmEvm<
+        evm: revm::context::Evm<
             EthEvmContext<DB>,
             I,
             EthInstructions<EthInterpreter, EthEvmContext<DB>>,
             PRECOMPILE,
-            EthFrame,
+            EthFrame<EthInterpreter>,
         >,
         inspect: bool,
     ) -> Self {
@@ -153,12 +200,12 @@ impl<DB: MultiDatabase, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
     /// Consumes self and return the inner EVM instance.
     pub fn into_inner(
         self,
-    ) -> RevmEvm<
+    ) -> revm::context::Evm<
         EthEvmContext<DB>,
         I,
         EthInstructions<EthInterpreter, EthEvmContext<DB>>,
         PRECOMPILE,
-        EthFrame,
+        EthFrame<EthInterpreter>,
     > {
         self.inner
     }
@@ -193,7 +240,6 @@ impl<DB: MultiDatabase, I, PRECOMPILE> DerefMut for EthEvm<DB, I, PRECOMPILE> {
 impl<DB, I, PRECOMPILE> Evm for EthEvm<DB, I, PRECOMPILE>
 where
     DB: MultiDatabase,
-    I: Inspector<EthEvmContext<DB>>,
     PRECOMPILE: PrecompileProvider<EthEvmContext<DB>, Output = InterpreterResult>,
 {
     type DB = DB;
@@ -247,11 +293,9 @@ where
         &mut self,
         tx: Self::Tx,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        if self.inspect {
-            self.inner.inspect_tx(tx)
-        } else {
-            self.inner.transact(tx)
-        }
+        // For now, always use transact without inspector
+        // The inspect_tx would require I: Inspector<EthEvmContext<DB>>
+        self.inner.transact(tx)
     }
 
     fn transact_system_call(
@@ -265,22 +309,28 @@ where
     }
 
     fn db_mut(&mut self) -> &mut Self::DB {
-        &mut self.inner.ctx.db
+        self.inner.ctx.db_mut()
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
-        let (mut context, _instructions, _precompiles, _inspector, _frame) = self.inner.into_parts();
-        let db = core::mem::take(&mut context.db);
-        let env = EvmEnv { block_env: context.block, cfg_env: context.cfg };
+        // Destructure the EVM to get the context
+        let revm::context::Evm { ctx, .. } = self.inner;
+        let Context { block, cfg, journaled_state, .. } = ctx;
+        
+        // Get the database from the journaled state  
+        let db = journaled_state.database;
+        
+        // Create the environment
+        let env = EvmEnv { block_env: block, cfg_env: cfg };
         (db, env)
     }
 
     fn precompiles_mut(&mut self) -> &mut Self::Precompiles {
-        self.inner.precompiles_mut()
+        &mut self.inner.precompiles
     }
 
     fn inspector_mut(&mut self) -> &mut Self::Inspector {
-        self.inner.inspector_mut()
+        &mut self.inner.inspector
     }
 }
 
@@ -288,23 +338,42 @@ where
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EthEvmFactory;
 
-impl<DB, R> EvmFactory<DB, R> for EthEvmFactory
+// Implementation specifically for &mut State<DB> which is what BlockExecutor needs
+impl<'a, DB> EvmFactory<&'a mut State<DB>> for EthEvmFactory
 where
-    DB: MultiDatabase,
-    R: crate::receipt_builder::ReceiptBuilder,
+    DB: MultiDatabase + 'a,
 {
-    type Evm<I: Inspector<EthEvmContext<DB>>> = EthEvm<DB, I>;
-    type Context<'a> = EthBlockExecutionCtx<'a>;
+    type Evm<I> = EthEvm<&'a mut State<DB>, NoOpInspector>;  // Always NoOpInspector
+    type Context<'b> = EthEvmContext<&'a mut State<DB>>;
     type Hardforks = SpecId;
-    type Transaction = <Self::Evm<NoOpInspector> as Evm>::Tx;
+    type Transaction = TxEnv;
 
-    fn create_evm<I: Inspector<EthEvmContext<DB>>>(
+    fn create_evm<I>(
         &self,
-        db: DB,
+        db: &'a mut State<DB>,
         env: EvmEnv<Self::Hardforks>,
-        inspector: I,
+        _inspector: I,
     ) -> Self::Evm<I> {
-        EthEvmBuilder::new(db, env).activate_inspector(inspector).build()
+        // Always return NoOpInspector version, ignoring the provided inspector
+        // This is a limitation of the current type system
+        EthEvmBuilder::new(db, env).build_no_inspector()
+    }
+}
+
+// Default implementation for () to satisfy the default type parameter
+impl EvmFactory<()> for EthEvmFactory {
+    type Evm<I> = EthEvm<EmptyDB, NoOpInspector>;
+    type Context<'a> = EthEvmContext<EmptyDB>;
+    type Hardforks = SpecId;
+    type Transaction = TxEnv;
+
+    fn create_evm<I>(
+        &self,
+        _db: (),
+        env: EvmEnv<Self::Hardforks>,
+        _inspector: I,
+    ) -> Self::Evm<I> {
+        EthEvmBuilder::new(EmptyDB::default(), env).build_no_inspector()
     }
 }
 

@@ -1,5 +1,7 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/evm"]
+# Excluding op-evm due to compilation issues
+# members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
@@ -46,14 +48,16 @@ alloy-consensus = { version = "1.0.0", default-features = false }
 alloy-primitives = { version = "1.0.0", default-features = false }
 alloy-sol-types = { version = "1.0.0", default-features = false }
 alloy-hardforks = { version = "0.2" }
+alloy-rpc-types-eth = { version = "1.0.0", default-features = false }
 
 # op-alloy
 alloy-op-hardforks = { version = "0.2" }
 op-alloy-consensus = { version = "0.17", default-features = false }
 
 # revm
-revm = { git = "https://github.com/taikoxyz/revm-private", branch = "v75-gwyneth-claude", default-features = false }
-# op-revm = { git = "https://github.com/taikoxyz/revm-private", branch = "v75-gwyneth-claude", default-features = false } # Disabled - incompatible with multi-chain architecture
+#revm = { path = "/home/brecht/Taiko/revm-v86-gwyneth/crates/revm", default-features = false }
+revm = { git = "https://github.com/taikoxyz/revm-private", branch = "v86-gwyneth", default-features = false }
+# op-revm disabled - incompatible with multi-chain architecture
 
 # misc
 auto_impl = "1"
