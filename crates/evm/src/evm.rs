@@ -1,21 +1,21 @@
 //! Abstraction over EVM.
 
 use crate::{tracing::TxTracer, EvmEnv, EvmError, IntoTxEnv};
-use alloy_primitives::{Address, Bytes};
+use alloy_primitives::Bytes;
 use core::{error::Error, fmt::Debug, hash::Hash};
 use revm::{
-    context::{result::ExecutionResult, BlockEnv},
+    context::{result::ExecutionResult, BlockEnv}, 
     context_interface::{
         result::{HaltReasonTr, ResultAndState},
-        ContextTr,
-    },
-    inspector::{JournalExt, NoOpInspector},
-    DatabaseCommit, Inspector,
+    }, 
+    database_interface::{MultiChainDatabase, MultiChainDatabaseCommit}, 
+    inspector::NoOpInspector, 
+    primitives::{ChainAddress, HashMap},
 };
 
-/// Helper trait to bound [`revm::Database::Error`] with common requirements.
-pub trait Database: revm::Database<Error: Error + Send + Sync + 'static> + Debug {}
-impl<T> Database for T where T: revm::Database<Error: Error + Send + Sync + 'static> + Debug {}
+/// Helper trait to bound [`MultiChainDatabase::Error`] with common requirements.
+pub trait MultiDatabase: MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
+impl<T> MultiDatabase for T where T: MultiChainDatabase<Error: Error + Send + Sync + 'static> {}
 
 /// An instance of an ethereum virtual machine.
 ///
@@ -58,8 +58,17 @@ pub trait Evm {
     /// Evm inspector.
     type Inspector;
 
-    /// Reference to [`BlockEnv`].
-    fn block(&self) -> &BlockEnv;
+    /// Reference to all blocks as a HashMap.
+    fn blocks(&self) -> &HashMap<u64, BlockEnv>;
+
+    /// Reference to the current chain's [`BlockEnv`].
+    fn block(&self) -> &BlockEnv {
+        let chain_id = self.chain_id();
+        self.blocks()
+            .get(&chain_id)
+            .or_else(|| self.blocks().get(&0)) // fallback to chain 0
+            .expect("No block environment found for chain or fallback chain 0")
+    }
 
     /// Returns the chain ID of the environment.
     fn chain_id(&self) -> u64;
@@ -95,20 +104,13 @@ pub trait Evm {
     /// covering edge cases when beneficiary is set to the system contract address.
     fn transact_system_call(
         &mut self,
-        caller: Address,
-        contract: Address,
+        caller: ChainAddress,
+        contract: ChainAddress,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error>;
 
-    /// Returns an immutable reference to the underlying database.
-    fn db(&self) -> &Self::DB {
-        self.components().0
-    }
-
     /// Returns a mutable reference to the underlying database.
-    fn db_mut(&mut self) -> &mut Self::DB {
-        self.components_mut().0
-    }
+    fn db_mut(&mut self) -> &mut Self::DB;
 
     /// Executes a transaction and commits the state changes to the underlying database.
     fn transact_commit(
@@ -116,10 +118,10 @@ pub trait Evm {
         tx: impl IntoTxEnv<Self::Tx>,
     ) -> Result<ExecutionResult<Self::HaltReason>, Self::Error>
     where
-        Self::DB: DatabaseCommit,
+        Self::DB: MultiChainDatabaseCommit,
     {
         let ResultAndState { result, state } = self.transact(tx)?;
-        self.db_mut().commit(state);
+        self.db_mut().commit_multi(state);
 
         Ok(result)
     }
@@ -146,111 +148,59 @@ pub trait Evm {
     }
 
     /// Determines whether additional transactions should be inspected or not.
-    ///
-    /// See also [`EvmFactory::create_evm_with_inspector`].
-    fn set_inspector_enabled(&mut self, enabled: bool);
-
-    /// Enables the configured inspector.
-    ///
-    /// All additional transactions will be inspected if enabled.
-    fn enable_inspector(&mut self) {
-        self.set_inspector_enabled(true)
+    fn should_continue(&mut self, result: &ExecutionResult<Self::HaltReason>) -> bool {
+        result.is_success()
     }
 
-    /// Disables the configured inspector.
-    ///
-    /// Transactions will no longer be inspected.
-    fn disable_inspector(&mut self) {
-        self.set_inspector_enabled(false)
-    }
+    /// Returns mutable reference to the precompiles.
+    fn precompiles_mut(&mut self) -> &mut Self::Precompiles;
 
-    /// Getter of precompiles.
-    fn precompiles(&self) -> &Self::Precompiles {
-        self.components().2
-    }
-
-    /// Mutable getter of precompiles.
-    fn precompiles_mut(&mut self) -> &mut Self::Precompiles {
-        self.components_mut().2
-    }
-
-    /// Getter of inspector.
-    fn inspector(&self) -> &Self::Inspector {
-        self.components().1
-    }
-
-    /// Mutable getter of inspector.
-    fn inspector_mut(&mut self) -> &mut Self::Inspector {
-        self.components_mut().1
-    }
-
-    /// Provides immutable references to the database, inspector and precompiles.
-    fn components(&self) -> (&Self::DB, &Self::Inspector, &Self::Precompiles);
-
-    /// Provides mutable references to the database, inspector and precompiles.
-    fn components_mut(&mut self) -> (&mut Self::DB, &mut Self::Inspector, &mut Self::Precompiles);
+    /// Returns mutable reference to the inspector.
+    fn inspector_mut(&mut self) -> &mut Self::Inspector;
 }
 
-/// A type responsible for creating instances of an ethereum virtual machine given a certain input.
-pub trait EvmFactory {
-    /// The EVM type that this factory creates.
-    type Evm<DB: Database, I: Inspector<Self::Context<DB>>>: Evm<
-        DB = DB,
-        Tx = Self::Tx,
-        HaltReason = Self::HaltReason,
-        Error = Self::Error<DB::Error>,
-        Spec = Self::Spec,
-        Precompiles = Self::Precompiles,
-        Inspector = I,
-    >;
+/// Consumes the tracer and builds its final state.
+///
+/// This trait can be implemented by tracers that need to consume their internal state to produce
+/// a final output. This is typically used at the end of tracing operations to generate a
+/// comprehensive trace result.
+pub trait IntoTracer {
+    /// Final output type of the tracer.
+    type Output;
 
-    /// The EVM context for inspectors
-    type Context<DB: Database>: ContextTr<Db = DB, Journal: JournalExt>;
-    /// Transaction environment.
-    type Tx: IntoTxEnv<Self::Tx>;
-    /// EVM error. See [`Evm::Error`].
-    type Error<DBError: Error + Send + Sync + 'static>: EvmError;
-    /// Halt reason. See [`Evm::HaltReason`].
-    type HaltReason: HaltReasonTr + Send + Sync + 'static;
-    /// The EVM specification identifier, see [`Evm::Spec`].
-    type Spec: Debug + Copy + Hash + Eq + Send + Sync + Default + 'static;
-    /// Precompiles used by the EVM.
-    type Precompiles;
-
-    /// Creates a new instance of an EVM.
-    fn create_evm<DB: Database>(
-        &self,
-        db: DB,
-        evm_env: EvmEnv<Self::Spec>,
-    ) -> Self::Evm<DB, NoOpInspector>;
-
-    /// Creates a new instance of an EVM with an inspector.
-    ///
-    /// Note: It is expected that the [`Inspector`] is usually provided as `&mut Inspector` so that
-    /// it remains owned by the call site when [`Evm::transact`] is invoked.
-    fn create_evm_with_inspector<DB: Database, I: Inspector<Self::Context<DB>>>(
-        &self,
-        db: DB,
-        input: EvmEnv<Self::Spec>,
-        inspector: I,
-    ) -> Self::Evm<DB, I>;
+    /// Consumes the tracer and returns its final state.
+    fn finish(self) -> Self::Output;
 }
 
-/// An extension trait for [`EvmFactory`] providing useful non-overridable methods.
-pub trait EvmFactoryExt: EvmFactory {
-    /// Creates a new [`TxTracer`] instance with the given database, input and fused inspector.
-    fn create_tracer<DB, I>(
-        &self,
-        db: DB,
-        input: EvmEnv<Self::Spec>,
-        fused_inspector: I,
-    ) -> TxTracer<Self::Evm<DB, I>>
+/// Factory for creating EVM instances.
+pub trait EvmFactory<DB = (), R = ()> {
+    /// The EVM type produced by this factory.
+    type Evm<I>: Evm;
+
+    /// Additional data required by the `BlockExecutor`.
+    type Context<'a>;
+
+    /// Supported hardforks.
+    type Hardforks;
+
+    /// Associated transaction type.
+    type Transaction;
+
+    /// Create EVM instance.
+    fn create_evm<I>(&self, db: DB, env: EvmEnv<Self::Hardforks>, inspector: I) -> Self::Evm<I>;
+
+    /// Create EVM instance with TX tracer.
+    fn create_evm_with_tracer<T>(&self, db: DB, env: EvmEnv<Self::Hardforks>, tracer: T) -> TxTracer<Self::Evm<T>>
     where
-        DB: Database + DatabaseCommit,
-        I: Inspector<Self::Context<DB>> + Clone,
+        Self::Evm<T>: Evm,
+        <Self::Evm<T> as Evm>::Inspector: Clone,
+        <Self::Evm<T> as Evm>::DB: MultiChainDatabaseCommit,
     {
-        TxTracer::new(self.create_evm_with_inspector(db, input, fused_inspector))
+        TxTracer::new(self.create_evm(db, env, tracer))
+    }
+
+    /// Create EVM instance with standard environment types.
+    fn create_evm_env(&self, db: DB, env: EvmEnv<Self::Hardforks>) -> Self::Evm<NoOpInspector> {
+        self.create_evm(db, env, NoOpInspector {})
     }
 }
-
-impl<T: EvmFactory> EvmFactoryExt for T {}

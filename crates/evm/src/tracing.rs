@@ -5,7 +5,6 @@ use core::{fmt::Debug, iter::Peekable};
 use revm::{
     context::result::{ExecutionResult, ResultAndState},
     state::EvmState,
-    DatabaseCommit,
 };
 
 /// A helper type for tracing transactions.
@@ -42,7 +41,10 @@ impl<'a, T, E: Evm<Inspector: Clone>> TracingCtx<'a, T, E> {
     }
 }
 
-impl<E: Evm<Inspector: Clone, DB: DatabaseCommit>> TxTracer<E> {
+impl<E: Evm<Inspector: Clone>> TxTracer<E> 
+where
+    E::DB: revm::database_interface::MultiChainDatabaseCommit,
+{
     /// Creates a new [`TxTracer`] instance.
     pub fn new(mut evm: E) -> Self {
         Self { fused_inspector: evm.inspector_mut().clone(), evm }
@@ -139,7 +141,8 @@ impl<E: Evm, Txs: Iterator, F> TracerIter<'_, E, Txs, F> {
 
 impl<E, T, Txs, F, O, Err> Iterator for TracerIter<'_, E, Txs, F>
 where
-    E: Evm<DB: DatabaseCommit, Inspector: Clone>,
+    E: Evm<Inspector: Clone>,
+    E::DB: revm::database_interface::MultiChainDatabaseCommit,
     T: IntoTxEnv<E::Tx> + Clone,
     Txs: Iterator<Item = T>,
     Err: From<E::Error>,
@@ -151,27 +154,39 @@ where
         let tx = self.txs.next()?;
         let result = self.inner.evm.transact(tx.clone());
 
-        let TxTracer { evm, fused_inspector } = self.inner;
-        let (db, inspector, _) = evm.components_mut();
-
         let Ok(ResultAndState { result, state }) = result else {
             return None;
         };
         let mut was_fused = false;
-        let output = (self.hook)(TracingCtx {
-            tx,
-            result,
-            state: &state,
-            inspector,
-            db,
-            fused_inspector: &*fused_inspector,
-            was_fused: &mut was_fused,
-        });
+        
+        // Clone state for commit later
+        let state_for_commit = state.clone();
+        
+        // We need to access inspector and db separately to avoid double mutable borrow
+        let output = {
+            let inspector = self.inner.evm.inspector_mut() as *mut _;
+            let db = self.inner.evm.db_mut() as *mut _;
+            let fused_inspector = &self.inner.fused_inspector;
+            
+            // SAFETY: We're not accessing the same fields concurrently
+            unsafe {
+                (self.hook)(TracingCtx {
+                    tx,
+                    result,
+                    state: &state,
+                    inspector: &mut *inspector,
+                    db: &mut *db,
+                    fused_inspector,
+                    was_fused: &mut was_fused,
+                })
+            }
+        };
 
         // Only commit next transaction if `skip_last_commit` is disabled or there is a next
         // transaction.
         if !self.skip_last_commit || self.txs.peek().is_some() {
-            db.commit(state);
+            use revm::database_interface::MultiChainDatabaseCommit;
+            self.inner.evm.db_mut().commit_multi(state_for_commit);
         }
 
         if self.fuse && !was_fused {
