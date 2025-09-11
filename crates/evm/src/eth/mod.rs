@@ -14,7 +14,7 @@ use revm::{
     inspector::NoOpInspector,
     interpreter::{interpreter::EthInterpreter, InterpreterResult},
     precompile::{PrecompileSpecId, Precompiles},
-    Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext, SystemCallEvm,
+    Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, SystemCallEvm,
 };
 
 mod block;
@@ -210,37 +210,29 @@ where
         self.inner.ctx.cfg.chain_id
     }
 
-    fn transact(
+    fn transact_raw(
         &mut self,
-        tx: impl crate::IntoTxEnv<Self::Tx>,
-    ) -> Result<ResultAndState, Self::Error> {
-        let mut tx_env = tx.into_tx_env();
-
+        mut tx: Self::Tx,
+    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
         // For legacy transactions without a chain_id, use the default from config
-        if tx_env.chain_id.is_none() {
+        if tx.chain_id.is_none() {
             let default_chain_id = if let Some(parent_chain_id) = self.cfg.parent_chain_id {
                 parent_chain_id
             } else {
                 self.cfg.chain_id
             };
-            tx_env.chain_id = Some(default_chain_id);
+            tx.chain_id = Some(default_chain_id);
 
             // Also update the caller and call addresses
-            tx_env.caller = ChainAddress::new(default_chain_id, tx_env.caller.1);
-            if let TxKind::Call(ref mut addr) = tx_env.kind {
+            tx.caller = ChainAddress::new(default_chain_id, tx.caller.1);
+            if let TxKind::Call(ref mut addr) = tx.kind {
                 *addr = ChainAddress::new(default_chain_id, addr.1);
             }
         }
 
         // Set chain_ids from available blocks
-        tx_env.chain_ids = Some(self.blocks().keys().cloned().collect());
-        self.transact_raw(tx_env)
-    }
-
-    fn transact_raw(
-        &mut self,
-        tx: Self::Tx,
-    ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
+        tx.chain_ids = Some(self.blocks().keys().cloned().collect());
+        
         if self.inspect {
             self.inner.inspect_tx(tx)
         } else {

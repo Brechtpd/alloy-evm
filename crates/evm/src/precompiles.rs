@@ -1,15 +1,17 @@
 //! Helpers for dealing with Precompiles.
 
-use crate::{MultiDatabase, EvmInternals};
+use crate::EvmInternals;
 use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc};
 use core::fmt::Debug;
 use alloy_consensus::transaction::Either;
 use alloy_primitives::{
+    self as primitives,
     map::{HashMap, HashSet},
     Address, Bytes, U256,
 };
 use revm::{
     context::LocalContextTr,
+    context_interface::ContextTr,
     handler::{EthPrecompiles, PrecompileProvider},
     interpreter::{CallInput, Gas, InputsImpl, InstructionResult, InterpreterResult},
     precompile::{PrecompileError, PrecompileFn, PrecompileId, PrecompileResult, Precompiles},
@@ -384,42 +386,58 @@ where
             output: Bytes::new(),
         };
 
-        let (local, journal) = (&context.local, &mut context.journaled_state);
-
         // Execute the precompile
-        let r;
-        let input_bytes = match &inputs.input {
-            CallInput::SharedBuffer(range) => {
-                // `map_or` does not work here as we use `r` to extend lifetime of the slice
-                // and return it.
-                #[allow(clippy::option_if_let_else)]
-                if let Some(slice) = local.shared_memory_buffer_slice(range.clone()) {
-                    r = slice;
-                    &*r
-                } else {
-                    &[]
+        let precompile_result = {
+            let (local, journal) = (&context.local, &mut context.journaled_state);
+            
+            let r;
+            let input_bytes = match &inputs.input {
+                CallInput::SharedBuffer(range) => {
+                    // `map_or` does not work here as we use `r` to extend lifetime of the slice
+                    // and return it.
+                    #[allow(clippy::option_if_let_else)]
+                    if let Some(slice) = local.shared_memory_buffer_slice(range.clone()) {
+                        r = slice;
+                        &*r
+                    } else {
+                        &[]
+                    }
                 }
-            }
-            CallInput::Bytes(bytes) => bytes.as_ref(),
-        };
+                CallInput::Bytes(bytes) => bytes.as_ref(),
+            };
 
-        // Get the BlockEnv for the chain of the caller
-        let chain_id = inputs.caller_address.0;
-        let block_env = context.block.get(&chain_id)
-            .ok_or_else(|| format!("No block environment for chain {}", chain_id))?;
-        
-        let precompile_result = precompile.call(PrecompileInput {
-            data: input_bytes,
-            gas: gas_limit,
-            caller: inputs.caller_address.1,  // Extract Address from ChainAddress
-            value: inputs.call_value,
-            internals: EvmInternals::new(journal, block_env),
-            target_address: inputs.target_address.1,  // Extract Address from ChainAddress
-            bytecode_address: inputs.bytecode_address.expect("always set for precompile calls").1,  // Extract Address from ChainAddress
-        });
+            // Get the BlockEnv for the chain of the caller
+            let chain_id = inputs.caller_address.0;
+            let block_env = context.block.get(&chain_id)
+                .ok_or_else(|| format!("No block environment for chain {}", chain_id))?;
+
+            precompile.call(PrecompileInput {
+                data: input_bytes,
+                gas: gas_limit,
+                caller: inputs.caller_address.1,  // Extract Address from ChainAddress
+                value: inputs.call_value,
+                internals: EvmInternals::new(journal, block_env),
+                target_address: inputs.target_address.1,  // Extract Address from ChainAddress
+                bytecode_address: inputs.bytecode_address.expect("always set for precompile calls").1,  // Extract Address from ChainAddress
+            })
+        };
 
         match precompile_result {
             Ok(output) => {
+                // Store call options in the context if the precompile set them (XCALLOPTIONS)
+                if let Some(call_options) = output.call_options {
+                    // Validate chain_id for XCALLOPTIONS precompile
+                    let is_xcalloptions = address == &primitives::address!("00000000000000000000000000000000000004d2");
+                    if is_xcalloptions {
+                        let allowed_chains = context.tx().allowed_chain_ids();
+                        if !allowed_chains.is_empty() && !allowed_chains.contains(&call_options.to.0) {
+                            result.result = InstructionResult::PrecompileError;
+                            return Ok(Some(result));
+                        }
+                    }
+                    context.local_mut().set_call_options(call_options);
+                }
+
                 let underflow = result.gas.record_cost(output.gas_used);
                 assert!(underflow, "Gas underflow is not possible");
                 result.result = if output.reverted {

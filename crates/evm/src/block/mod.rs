@@ -1,7 +1,7 @@
 //! Block execution abstraction.
 
 use crate::{
-    Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, IntoTxEnv, MultiDatabase, RecoveredTx, ToTxEnv
+    Evm, EvmFactory, FromRecoveredTx, FromTxWithEncoded, MultiDatabase, RecoveredTx, ToTxEnv
 };
 use alloc::{boxed::Box, vec::Vec};
 use alloy_eips::eip7685::Requests;

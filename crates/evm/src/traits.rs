@@ -1,6 +1,5 @@
 //! EVM traits.
 
-use crate::MultiDatabase;
 use alloc::boxed::Box;
 use alloy_primitives::{Address, Log, B256, U256};
 use revm::primitives::ChainAddress;
