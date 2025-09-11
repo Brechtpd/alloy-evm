@@ -1,19 +1,19 @@
 //! Ethereum EVM implementation.
 
-use crate::{env::EvmEnv, evm::EvmFactory, precompiles::PrecompilesMap, Database, Evm};
-use alloy_primitives::{Address, Bytes};
+use crate::{env::EvmEnv, evm::EvmFactory, precompiles::PrecompilesMap, Evm, MultiDatabase};
+use alloy_primitives::Bytes;
 use core::{
     fmt::Debug,
     ops::{Deref, DerefMut},
 };
 use revm::{
+    primitives::{ChainAddress, HashMap, MultiChainTxKind as TxKind, hardfork::SpecId},
     context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
     context_interface::result::{EVMError, HaltReason, ResultAndState},
     handler::{instructions::EthInstructions, EthFrame, EthPrecompiles, PrecompileProvider},
     inspector::NoOpInspector,
     interpreter::{interpreter::EthInterpreter, InterpreterResult},
     precompile::{PrecompileSpecId, Precompiles},
-    primitives::hardfork::SpecId,
     Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, MainContext, SystemCallEvm,
 };
 
@@ -29,17 +29,17 @@ pub mod spec;
 pub type EthEvmContext<DB> = Context<BlockEnv, TxEnv, CfgEnv, DB>;
 
 /// Helper builder to construct `EthEvm` instances in a unified way.
-#[derive(Debug)]
-pub struct EthEvmBuilder<DB: Database, I = NoOpInspector> {
+#[derive(Clone)]
+pub struct EthEvmBuilder<DB: MultiDatabase, I = NoOpInspector> {
     db: DB,
-    block_env: BlockEnv,
+    block_env: HashMap<u64, BlockEnv>,
     cfg_env: CfgEnv,
     inspector: I,
     inspect: bool,
     precompiles: Option<PrecompilesMap>,
 }
 
-impl<DB: Database> EthEvmBuilder<DB, NoOpInspector> {
+impl<DB: MultiDatabase> EthEvmBuilder<DB, NoOpInspector> {
     /// Creates a builder from the provided `EvmEnv` and database.
     pub fn new(db: DB, env: EvmEnv) -> Self {
         Self {
@@ -53,7 +53,7 @@ impl<DB: Database> EthEvmBuilder<DB, NoOpInspector> {
     }
 }
 
-impl<DB: Database, I> EthEvmBuilder<DB, I> {
+impl<DB: MultiDatabase, I> EthEvmBuilder<DB, I> {
     /// Sets a custom inspector
     pub fn inspector<J>(self, inspector: J) -> EthEvmBuilder<DB, J> {
         EthEvmBuilder {
@@ -96,13 +96,14 @@ impl<DB: Database, I> EthEvmBuilder<DB, I> {
     {
         let precompiles = match self.precompiles {
             Some(p) => p,
-            None => PrecompilesMap::from_static(Precompiles::new(PrecompileSpecId::from_spec_id(
-                self.cfg_env.spec,
-            ))),
+            None => PrecompilesMap::from_static(Precompiles::new(
+                PrecompileSpecId::from_spec_id(self.cfg_env.spec),
+                false, // xchain parameter
+            )),
         };
 
         let inner = Context::mainnet()
-            .with_block(self.block_env)
+            .with_blocks(self.block_env)
             .with_cfg(self.cfg_env)
             .with_db(self.db)
             .build_mainnet_with_inspector(self.inspector)
@@ -118,7 +119,7 @@ impl<DB: Database, I> EthEvmBuilder<DB, I> {
 /// support. [`Inspector`] support is configurable at runtime because it's part of the underlying
 /// [`RevmEvm`] type.
 #[expect(missing_debug_implementations)]
-pub struct EthEvm<DB: Database, I, PRECOMPILE = EthPrecompiles> {
+pub struct EthEvm<DB: MultiDatabase, I, PRECOMPILE = EthPrecompiles> {
     inner: RevmEvm<
         EthEvmContext<DB>,
         I,
@@ -129,7 +130,7 @@ pub struct EthEvm<DB: Database, I, PRECOMPILE = EthPrecompiles> {
     inspect: bool,
 }
 
-impl<DB: Database, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
+impl<DB: MultiDatabase, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
     /// Creates a new Ethereum EVM instance.
     ///
     /// The `inspect` argument determines whether the configured [`Inspector`] of the given
@@ -171,7 +172,7 @@ impl<DB: Database, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
     }
 }
 
-impl<DB: Database, I, PRECOMPILE> Deref for EthEvm<DB, I, PRECOMPILE> {
+impl<DB: MultiDatabase, I, PRECOMPILE> Deref for EthEvm<DB, I, PRECOMPILE> {
     type Target = EthEvmContext<DB>;
 
     #[inline]
@@ -180,7 +181,7 @@ impl<DB: Database, I, PRECOMPILE> Deref for EthEvm<DB, I, PRECOMPILE> {
     }
 }
 
-impl<DB: Database, I, PRECOMPILE> DerefMut for EthEvm<DB, I, PRECOMPILE> {
+impl<DB: MultiDatabase, I, PRECOMPILE> DerefMut for EthEvm<DB, I, PRECOMPILE> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.ctx_mut()
@@ -189,7 +190,7 @@ impl<DB: Database, I, PRECOMPILE> DerefMut for EthEvm<DB, I, PRECOMPILE> {
 
 impl<DB, I, PRECOMPILE> Evm for EthEvm<DB, I, PRECOMPILE>
 where
-    DB: Database,
+    DB: MultiDatabase,
     I: Inspector<EthEvmContext<DB>>,
     PRECOMPILE: PrecompileProvider<EthEvmContext<DB>, Output = InterpreterResult>,
 {
@@ -201,12 +202,39 @@ where
     type Precompiles = PRECOMPILE;
     type Inspector = I;
 
-    fn block(&self) -> &BlockEnv {
-        &self.block
+    fn blocks(&self) -> &HashMap<u64, BlockEnv> {
+        &self.inner.ctx.block
     }
 
     fn chain_id(&self) -> u64 {
-        self.cfg.chain_id
+        self.inner.ctx.cfg.chain_id
+    }
+
+    fn transact(
+        &mut self,
+        tx: impl crate::IntoTxEnv<Self::Tx>,
+    ) -> Result<ResultAndState, Self::Error> {
+        let mut tx_env = tx.into_tx_env();
+
+        // For legacy transactions without a chain_id, use the default from config
+        if tx_env.chain_id.is_none() {
+            let default_chain_id = if let Some(parent_chain_id) = self.cfg.parent_chain_id {
+                parent_chain_id
+            } else {
+                self.cfg.chain_id
+            };
+            tx_env.chain_id = Some(default_chain_id);
+
+            // Also update the caller and call addresses
+            tx_env.caller = ChainAddress::new(default_chain_id, tx_env.caller.1);
+            if let TxKind::Call(ref mut addr) = tx_env.kind {
+                *addr = ChainAddress::new(default_chain_id, addr.1);
+            }
+        }
+
+        // Set chain_ids from available blocks
+        tx_env.chain_ids = Some(self.blocks().keys().cloned().collect());
+        self.transact_raw(tx_env)
     }
 
     fn transact_raw(
@@ -222,11 +250,16 @@ where
 
     fn transact_system_call(
         &mut self,
-        caller: Address,
-        contract: Address,
+        caller: ChainAddress,
+        contract: ChainAddress,
         data: Bytes,
     ) -> Result<ResultAndState<Self::HaltReason>, Self::Error> {
-        self.inner.system_call_with_caller(caller, contract, data)
+        // Extract addresses from ChainAddress for system_call_with_caller
+        self.inner.system_call_with_caller(caller.1, contract.1, data)
+    }
+
+    fn db_mut(&mut self) -> &mut Self::DB {
+        &mut self.inner.ctx.journaled_state.database
     }
 
     fn finish(self) -> (Self::DB, EvmEnv<Self::Spec>) {
@@ -258,19 +291,19 @@ where
 pub struct EthEvmFactory;
 
 impl EvmFactory for EthEvmFactory {
-    type Evm<DB: Database, I: Inspector<EthEvmContext<DB>>> = EthEvm<DB, I, Self::Precompiles>;
-    type Context<DB: Database> = Context<BlockEnv, TxEnv, CfgEnv, DB>;
+    type Evm<DB: MultiDatabase, I: Inspector<EthEvmContext<DB>>> = EthEvm<DB, I, Self::Precompiles>;
+    type Context<DB: MultiDatabase> = Context<BlockEnv, TxEnv, CfgEnv, DB>;
     type Tx = TxEnv;
     type Error<DBError: core::error::Error + Send + Sync + 'static> = EVMError<DBError>;
     type HaltReason = HaltReason;
     type Spec = SpecId;
     type Precompiles = PrecompilesMap;
 
-    fn create_evm<DB: Database>(&self, db: DB, input: EvmEnv) -> Self::Evm<DB, NoOpInspector> {
+    fn create_evm<DB: MultiDatabase>(&self, db: DB, input: EvmEnv) -> Self::Evm<DB, NoOpInspector> {
         EthEvmBuilder::new(db, input).build()
     }
 
-    fn create_evm_with_inspector<DB: Database, I: Inspector<Self::Context<DB>>>(
+    fn create_evm_with_inspector<DB: MultiDatabase, I: Inspector<Self::Context<DB>>>(
         &self,
         db: DB,
         input: EvmEnv,
@@ -284,7 +317,7 @@ impl EvmFactory for EthEvmFactory {
 mod tests {
     use super::*;
     use alloy_primitives::address;
-    use revm::{database_interface::EmptyDB, primitives::hardfork::SpecId};
+    use revm::{database::{MultiEmptyDB, EmptyDB}, primitives::{hardfork::SpecId, HashMap}};
 
     #[test]
     fn test_precompiles_with_correct_spec() {
@@ -311,9 +344,13 @@ mod tests {
             early_cfg_env.spec = early_spec;
             early_cfg_env.chain_id = 1;
 
-            let early_env = EvmEnv { block_env: BlockEnv::default(), cfg_env: early_cfg_env };
+            let mut block_map = HashMap::new();
+            block_map.insert(1, BlockEnv::default());
+            let early_env = EvmEnv { block_env: block_map, cfg_env: early_cfg_env };
             let factory = EthEvmFactory;
-            let mut early_evm = factory.create_evm(EmptyDB::default(), early_env);
+            let mut multi_db = MultiEmptyDB::new();
+            multi_db.add_chain(1, EmptyDB::default());
+            let mut early_evm = factory.create_evm(multi_db, early_env);
 
             // precompile should NOT be available in early spec
             assert!(
@@ -325,8 +362,12 @@ mod tests {
             later_cfg_env.spec = later_spec;
             later_cfg_env.chain_id = 1;
 
-            let later_env = EvmEnv { block_env: BlockEnv::default(), cfg_env: later_cfg_env };
-            let mut later_evm = factory.create_evm(EmptyDB::default(), later_env);
+            let mut block_map = HashMap::new();
+            block_map.insert(1, BlockEnv::default());
+            let later_env = EvmEnv { block_env: block_map, cfg_env: later_cfg_env };
+            let mut multi_db = MultiEmptyDB::new();
+            multi_db.add_chain(1, EmptyDB::default());
+            let mut later_evm = factory.create_evm(multi_db, later_env);
 
             // precompile should be available in later spec
             assert!(

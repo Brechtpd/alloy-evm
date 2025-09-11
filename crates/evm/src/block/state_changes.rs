@@ -5,11 +5,12 @@ use alloy_consensus::BlockHeader;
 use alloy_eips::eip4895::{Withdrawal, Withdrawals};
 use alloy_hardforks::EthereumHardforks;
 use alloy_primitives::{map::HashMap, Address};
+use crate::MultiDatabase;
 use revm::{
     context::BlockEnv,
     database::State,
+    primitives::ChainAddress,
     state::{Account, AccountStatus, EvmState},
-    Database,
 };
 
 /// Collect all balance changes at the end of the block.
@@ -45,7 +46,7 @@ where
         }
 
         // Full block reward
-        *balance_increments.entry(block_env.beneficiary).or_default() +=
+        *balance_increments.entry(block_env.beneficiary.address()).or_default() +=
             calc::block_reward(base_block_reward, ommers.len());
     }
 
@@ -111,12 +112,14 @@ pub fn insert_post_block_withdrawals_balance_increments(
 pub fn balance_increment_state<DB>(
     balance_increments: &HashMap<Address, u128>,
     state: &mut State<DB>,
+    chain_id: u64,
 ) -> Result<EvmState, BlockExecutionError>
 where
-    DB: Database,
+    DB: MultiDatabase,
 {
-    let mut load_account = |address: &Address| -> Result<(Address, Account), BlockExecutionError> {
-        let cache_account = state.load_cache_account(*address).map_err(|_| {
+    let mut load_account = |address: &Address| -> Result<(ChainAddress, Account), BlockExecutionError> {
+        let chain_address = ChainAddress::new(chain_id, *address);
+        let cache_account = state.load_cache_account(chain_address).map_err(|_| {
             BlockExecutionError::msg("could not load account for balance increment")
         })?;
 
@@ -125,7 +128,7 @@ where
         })?;
 
         Ok((
-            *address,
+            chain_address,
             Account {
                 info: account.info.clone(),
                 storage: Default::default(),
