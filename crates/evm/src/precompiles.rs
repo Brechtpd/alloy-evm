@@ -359,11 +359,7 @@ where
 {
     type Output = InterpreterResult;
 
-    fn set_spec(&mut self, _spec: CfgEnv::Spec) -> bool {
-        false
-    }
-
-    fn set_spec_with_xchain(&mut self, _spec: CfgEnv::Spec, _xchain: bool) -> bool {
+    fn set_spec(&mut self, _spec: CfgEnv::Spec, _xchain: bool) -> bool {
         false
     }
 
