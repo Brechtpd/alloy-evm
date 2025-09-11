@@ -2,7 +2,7 @@ use alloy_evm::{Evm, EvmEnv, EvmFactory, eth::EthEvmFactory};
 use alloy_primitives::{address, Address, U256};
 use revm::{
     context::{BlockEnv, CfgEnv, TxEnv},
-    database::{MultiEmptyDB, EmptyDB},
+    inspector::NoOpInspector,
     primitives::{hardfork::SpecId, ChainAddress, HashMap, MultiChainTxKind as TxKind},
 };
 
@@ -15,7 +15,7 @@ fn test_multichain_support() {
     
     // Create block environment for the chain
     let mut block = BlockEnv::default();
-    block.number = 1000;
+    block.number = U256::from(1000);
     block.beneficiary = ChainAddress::new(1, address!("0x0000000000000000000000000000000000000001"));
     
     let mut block_env = HashMap::new();
@@ -23,16 +23,16 @@ fn test_multichain_support() {
     
     let env = EvmEnv { block_env, cfg_env };
     let factory = EthEvmFactory::default();
-    let mut multi_db = MultiEmptyDB::new();
-    multi_db.add_chain(1, EmptyDB::default());
-    let mut evm = factory.create_evm(multi_db, env);
+    let inspector = NoOpInspector {};
+    let mut evm = factory.create_evm((), env, inspector);
     
     // Test 2: Verify chain ID handling
     assert_eq!(evm.chain_id(), 1);
     
     // Test 3: Verify block access
-    let block = evm.block();
-    assert_eq!(block.number, 1000);
+    let blocks = evm.blocks();
+    let block = blocks.get(&1).unwrap();
+    assert_eq!(block.number, U256::from(1000));
     assert_eq!(block.beneficiary.0, 1); // chain_id
     assert_eq!(block.beneficiary.1, address!("0x0000000000000000000000000000000000000001"));
     
@@ -85,7 +85,7 @@ fn test_basic_evm_creation() {
     cfg_env.chain_id = 999;
     
     let mut block = BlockEnv::default();
-    block.number = 5000;
+    block.number = U256::from(5000);
     block.beneficiary = ChainAddress::new(999, address!("0x0000000000000000000000000000000000000000"));
     
     let mut block_env = HashMap::new();
@@ -93,13 +93,13 @@ fn test_basic_evm_creation() {
     
     let env = EvmEnv { block_env, cfg_env };
     let factory = EthEvmFactory::default();
-    let mut multi_db = MultiEmptyDB::new();
-    multi_db.add_chain(999, EmptyDB::default());
-    let evm = factory.create_evm(multi_db, env);
+    let inspector = NoOpInspector {};
+    let evm = factory.create_evm((), env, inspector);
     
     // Verify block is set correctly
-    let block = evm.block();
-    assert_eq!(block.number, 5000);
+    let blocks = evm.blocks();
+    let block = blocks.get(&999).unwrap();
+    assert_eq!(block.number, U256::from(5000));
 }
 
 #[test] 
@@ -112,7 +112,7 @@ fn test_different_chain_configs() {
         cfg_env.chain_id = chain_id;
         
         let mut block = BlockEnv::default();
-        block.number = 1000 * chain_id;
+        block.number = U256::from(1000 * chain_id);
         block.beneficiary = ChainAddress::new(chain_id, Address::from([chain_id as u8; 20]));
         
         let mut block_env = HashMap::new();
@@ -120,11 +120,12 @@ fn test_different_chain_configs() {
         
         let env = EvmEnv { block_env, cfg_env: cfg_env.clone() };
         let factory = EthEvmFactory::default();
-        let mut multi_db = MultiEmptyDB::new();
-        multi_db.add_chain(chain_id, EmptyDB::default());
-        let evm = factory.create_evm(multi_db, env);
+        let inspector = NoOpInspector {};
+        let evm = factory.create_evm((), env, inspector);
         
         assert_eq!(evm.chain_id(), chain_id);
-        assert_eq!(evm.block().number, 1000 * chain_id);
+        let blocks = evm.blocks();
+        let block = blocks.get(&chain_id).unwrap();
+        assert_eq!(block.number, U256::from(1000 * chain_id));
     }
 }

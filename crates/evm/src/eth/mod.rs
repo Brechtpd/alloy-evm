@@ -380,7 +380,7 @@ impl EvmFactory<()> for EthEvmFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Database;
+    use crate::MultiDatabase;
     use alloy_primitives::address;
     use revm::database::EmptyDB;
 
