@@ -791,10 +791,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::eth::EthEvmContext;
     use alloy_primitives::{address, Bytes};
     use revm::{
-        context::{Block, BlockEnv},
+        context::Block,
         database::{EmptyDB, MultiEmptyDB},
         precompile::{PrecompileId, PrecompileOutput},
         Context, MainBuilder,
