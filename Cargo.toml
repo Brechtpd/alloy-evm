@@ -55,7 +55,6 @@ alloy-op-hardforks = { version = "0.2" }
 op-alloy-consensus = { version = "0.17", default-features = false }
 
 # revm
-#revm = { path = "/home/brecht/Taiko/revm-v86-gwyneth/crates/revm", default-features = false }
 revm = { git = "https://github.com/taikoxyz/revm-private", branch = "v86-gwyneth", default-features = false }
 # op-revm disabled - incompatible with multi-chain architecture
 
