@@ -61,6 +61,10 @@ pub trait Evm {
     /// Reference to the current chain's [`BlockEnv`].
     fn block(&self) -> &BlockEnv {
         let chain_id = self.chain_id();
+        if self.blocks().get(&chain_id).is_none() {
+            println!("chain_id: {}", chain_id);
+            println!("blocks: {:?}", self.blocks());
+        }
         self.blocks()
             .get(&chain_id)
             .or_else(|| self.blocks().get(&0)) // fallback to chain 0
