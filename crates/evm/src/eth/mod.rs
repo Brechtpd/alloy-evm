@@ -98,7 +98,7 @@ impl<DB: MultiDatabase, I> EthEvmBuilder<DB, I> {
             Some(p) => p,
             None => PrecompilesMap::from_static(Precompiles::new(
                 PrecompileSpecId::from_spec_id(self.cfg_env.spec),
-                false, // xchain parameter
+                self.cfg_env.xchain,
             )),
         };
 
