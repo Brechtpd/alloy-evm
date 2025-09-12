@@ -412,7 +412,7 @@ where
                 gas: gas_limit,
                 caller: inputs.caller_address.1,  // Extract Address from ChainAddress
                 value: inputs.call_value,
-                internals: EvmInternals::new(journal, block_env),
+                internals: EvmInternals::new(journal, block_env, chain_id),
                 target_address: inputs.target_address.1,  // Extract Address from ChainAddress
                 bytecode_address: inputs.bytecode_address.expect("always set for precompile calls").1,  // Extract Address from ChainAddress
             })
@@ -826,14 +826,15 @@ mod tests {
             _ => panic!("Expected dynamic precompiles"),
         };
 
-        let block = ctx.block.get(&1).cloned().unwrap_or_default();
+        let chain_id = 1u64;
+        let block = ctx.block.get(&chain_id).cloned().unwrap_or_default();
         let result = dyn_precompile
             .call(PrecompileInput {
                 data: &test_input,
                 gas: gas_limit,
                 caller: Address::ZERO,
                 value: U256::ZERO,
-                internals: EvmInternals::new(&mut ctx.journaled_state, &block),
+                internals: EvmInternals::new(&mut ctx.journaled_state, &block, chain_id),
                 target_address: identity_address,
                 bytecode_address: identity_address,
             })
@@ -861,14 +862,15 @@ mod tests {
             _ => panic!("Expected dynamic precompiles"),
         };
 
-        let block = ctx.block.get(&1).cloned().unwrap_or_default();
+        let chain_id = 1u64;
+        let block = ctx.block.get(&chain_id).cloned().unwrap_or_default();
         let result = dyn_precompile
             .call(PrecompileInput {
                 data: &test_input,
                 gas: gas_limit,
                 caller: Address::ZERO,
                 value: U256::ZERO,
-                internals: EvmInternals::new(&mut ctx.journaled_state, &block),
+                internals: EvmInternals::new(&mut ctx.journaled_state, &block, chain_id),
                 target_address: identity_address,
                 bytecode_address: identity_address,
             })
@@ -901,14 +903,15 @@ mod tests {
 
         let dyn_precompile: DynPrecompile = closure_precompile.into();
 
-        let block = ctx.block.get(&1).cloned().unwrap_or_default();
+        let chain_id = 1u64;
+        let block = ctx.block.get(&chain_id).cloned().unwrap_or_default();
         let result = dyn_precompile
             .call(PrecompileInput {
                 data: &test_input,
                 gas: gas_limit,
                 caller: Address::ZERO,
                 value: U256::ZERO,
-                internals: EvmInternals::new(&mut ctx.journaled_state, &block),
+                internals: EvmInternals::new(&mut ctx.journaled_state, &block, chain_id),
                 target_address: Address::ZERO,
                 bytecode_address: Address::ZERO,
             })
@@ -979,7 +982,8 @@ mod tests {
         assert!(dynamic_precompile.is_some(), "Dynamic precompile should be found");
 
         // Execute the dynamic precompile
-        let block = ctx.block.get(&1).cloned().unwrap_or_default();
+        let chain_id = 1u64;
+        let block = ctx.block.get(&chain_id).cloned().unwrap_or_default();
         let result = dynamic_precompile
             .unwrap()
             .call(PrecompileInput {
@@ -987,7 +991,7 @@ mod tests {
                 gas: 1000,
                 caller: Address::ZERO,
                 value: U256::ZERO,
-                internals: EvmInternals::new(&mut ctx.journaled_state, &block),
+                internals: EvmInternals::new(&mut ctx.journaled_state, &block, chain_id),
                 target_address: dynamic_address,
                 bytecode_address: dynamic_address,
             })
@@ -1018,7 +1022,8 @@ mod tests {
         let precompile = spec_precompiles.get(&identity_address);
         assert!(precompile.is_some(), "Identity precompile should exist");
 
-        let block = ctx.block.get(&1).cloned().unwrap_or_default();
+        let chain_id = 1u64;
+        let block = ctx.block.get(&chain_id).cloned().unwrap_or_default();
         let result = precompile
             .unwrap()
             .call(PrecompileInput {
@@ -1028,7 +1033,7 @@ mod tests {
                 value: U256::ZERO,
                 target_address: identity_address,
                 bytecode_address: identity_address,
-                internals: EvmInternals::new(&mut ctx.journaled_state, &block),
+                internals: EvmInternals::new(&mut ctx.journaled_state, &block, chain_id),
             })
             .unwrap();
         assert_eq!(result.bytes, test_input, "Identity precompile should return the input data");
@@ -1048,7 +1053,8 @@ mod tests {
             "Identity precompile should exist after conversion to dynamic"
         );
 
-        let block = ctx.block.get(&1).cloned().unwrap_or_default();
+        let chain_id = 1u64;
+        let block = ctx.block.get(&chain_id).cloned().unwrap_or_default();
         let result = dyn_precompile
             .unwrap()
             .call(PrecompileInput {
@@ -1056,7 +1062,7 @@ mod tests {
                 gas: gas_limit,
                 caller: Address::ZERO,
                 value: U256::ZERO,
-                internals: EvmInternals::new(&mut ctx.journaled_state, &block),
+                internals: EvmInternals::new(&mut ctx.journaled_state, &block, chain_id),
                 target_address: identity_address,
                 bytecode_address: identity_address,
             })

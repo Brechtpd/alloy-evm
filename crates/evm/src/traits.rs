@@ -77,7 +77,10 @@ trait EvmInternalsTr: revm::database_interface::MultiChainDatabase<Error = Erase
 
 /// Helper internal struct for implementing [`EvmInternals`].
 #[derive(Debug)]
-struct EvmInternalsImpl<'a, T>(&'a mut T);
+struct EvmInternalsImpl<'a, T> {
+    journal: &'a mut T,
+    chain_id: u64,
+}
 
 impl<T> revm::database_interface::MultiChainDatabase for EvmInternalsImpl<'_, T>
 where
@@ -87,11 +90,11 @@ where
     type Error = ErasedError;
 
     fn basic_multi(&mut self, address: ChainAddress) -> Result<Option<AccountInfo>, Self::Error> {
-        self.0.db_mut().basic_multi(address).map_err(ErasedError::new)
+        self.journal.db_mut().basic_multi(address).map_err(ErasedError::new)
     }
 
     fn code_by_hash_multi(&mut self, chain_id: u64, code_hash: B256) -> Result<Bytecode, Self::Error> {
-        self.0.db_mut().code_by_hash_multi(chain_id, code_hash).map_err(ErasedError::new)
+        self.journal.db_mut().code_by_hash_multi(chain_id, code_hash).map_err(ErasedError::new)
     }
 
     fn storage_multi(
@@ -99,11 +102,11 @@ where
         address: ChainAddress,
         index: StorageKey,
     ) -> Result<StorageValue, Self::Error> {
-        self.0.db_mut().storage_multi(address, index).map_err(ErasedError::new)
+        self.journal.db_mut().storage_multi(address, index).map_err(ErasedError::new)
     }
 
     fn block_hash_multi(&mut self, chain_id: u64, number: u64) -> Result<B256, Self::Error> {
-        self.0.db_mut().block_hash_multi(chain_id, number).map_err(ErasedError::new)
+        self.journal.db_mut().block_hash_multi(chain_id, number).map_err(ErasedError::new)
     }
 }
 
@@ -116,18 +119,18 @@ where
         &mut self,
         address: Address,
     ) -> Result<StateLoad<&mut Account>, EvmInternalsError> {
-        // Convert Address to ChainAddress using default chain_id 1
-        let chain_address = ChainAddress::new(1, address);
-        self.0.load_account(chain_address).map_err(EvmInternalsError::database)
+        // Convert Address to ChainAddress using the active chain_id
+        let chain_address = ChainAddress::new(self.chain_id, address);
+        self.journal.load_account(chain_address).map_err(EvmInternalsError::database)
     }
 
     fn load_account_code(
         &mut self,
         address: Address,
     ) -> Result<StateLoad<&mut Account>, EvmInternalsError> {
-        // Convert Address to ChainAddress using default chain_id 1
-        let chain_address = ChainAddress::new(1, address);
-        self.0.load_account_code(chain_address).map_err(EvmInternalsError::database)
+        // Convert Address to ChainAddress using the active chain_id
+        let chain_address = ChainAddress::new(self.chain_id, address);
+        self.journal.load_account_code(chain_address).map_err(EvmInternalsError::database)
     }
 
     fn sload(
@@ -135,21 +138,21 @@ where
         address: Address,
         key: StorageKey,
     ) -> Result<StateLoad<StorageValue>, EvmInternalsError> {
-        // Convert Address to ChainAddress using default chain_id 1
-        let chain_address = ChainAddress::new(1, address);
-        self.0.sload(chain_address, key).map_err(EvmInternalsError::database)
+        // Convert Address to ChainAddress using the active chain_id
+        let chain_address = ChainAddress::new(self.chain_id, address);
+        self.journal.sload(chain_address, key).map_err(EvmInternalsError::database)
     }
 
     fn touch_account(&mut self, address: Address) {
-        // Convert Address to ChainAddress using default chain_id 1
-        let chain_address = ChainAddress::new(1, address);
-        self.0.touch_account(chain_address);
+        // Convert Address to ChainAddress using the active chain_id
+        let chain_address = ChainAddress::new(self.chain_id, address);
+        self.journal.touch_account(chain_address);
     }
 
     fn set_code(&mut self, address: Address, code: Bytecode) {
-        // Convert Address to ChainAddress using default chain_id 1
-        let chain_address = ChainAddress::new(1, address);
-        self.0.set_code(chain_address, code);
+        // Convert Address to ChainAddress using the active chain_id
+        let chain_address = ChainAddress::new(self.chain_id, address);
+        self.journal.set_code(chain_address, code);
     }
 
     fn sstore(
@@ -158,13 +161,13 @@ where
         key: StorageKey,
         value: StorageValue,
     ) -> Result<StateLoad<SStoreResult>, EvmInternalsError> {
-        // Convert Address to ChainAddress using default chain_id 1
-        let chain_address = ChainAddress::new(1, address);
-        self.0.sstore(chain_address, key, value).map_err(EvmInternalsError::database)
+        // Convert Address to ChainAddress using the active chain_id
+        let chain_address = ChainAddress::new(self.chain_id, address);
+        self.journal.sstore(chain_address, key, value).map_err(EvmInternalsError::database)
     }
 
     fn log(&mut self, log: Log) {
-        self.0.log(log);
+        self.journal.log(log);
     }
 }
 
@@ -176,12 +179,12 @@ pub struct EvmInternals<'a> {
 
 impl<'a> EvmInternals<'a> {
     /// Creates a new [`EvmInternals`] instance.
-    pub fn new<T>(journal: &'a mut T, block_env: &'a dyn Block) -> Self
+    pub fn new<T>(journal: &'a mut T, block_env: &'a dyn Block, chain_id: u64) -> Self
     where
         T: JournalTr<Database: revm::database_interface::MultiChainDatabase> + Debug,
         <T::Database as revm::database_interface::MultiChainDatabase>::Error: Send + Sync + 'static,
     {
-        Self { internals: Box::new(EvmInternalsImpl(journal)), block_env }
+        Self { internals: Box::new(EvmInternalsImpl { journal, chain_id }), block_env }
     }
 
     /// Returns the  evm's block information.
