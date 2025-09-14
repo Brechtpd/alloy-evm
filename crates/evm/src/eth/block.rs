@@ -23,7 +23,7 @@ use alloy_primitives::{Log, B256};
 use revm::{
     context::result::ExecutionResult, context_interface::result::ResultAndState,
     database::State, database_interface::MultiChainDatabaseCommit,
-    primitives::{ChainAddress, HashMap, StateChanges}, Inspector,
+    primitives::{ChainAddress, HashMap, GwynethJournal}, Inspector,
 };
 
 /// Context for Ethereum block execution.
@@ -59,7 +59,7 @@ pub struct EthBlockExecutor<'a, Evm, Spec, R: ReceiptBuilder> {
     /// Total gas used by transactions in this block.
     gas_used: u64,
     /// State changes from executed transactions.
-    state_changes: Vec<StateChanges>,
+    gwyneth_journal: Vec<GwynethJournal>,
     /// Gas used per chain.
     gas_used_per_chain: HashMap<u64, u64>,
 }
@@ -76,7 +76,7 @@ where
             ctx,
             receipts: Vec::new(),
             gas_used: 0,
-            state_changes: Vec::new(),
+            gwyneth_journal: Vec::new(),
             gas_used_per_chain: HashMap::default(),
             system_caller: SystemCaller::new(spec.clone()),
             spec,
@@ -154,7 +154,7 @@ where
             *self.gas_used_per_chain.entry(chain_id).or_default() += chain_gas;
         }
 
-        self.state_changes.push(result.state_changes());
+        self.gwyneth_journal.push(result.gwyneth_journal());
 
         // append gas used
         self.gas_used += gas_used;
@@ -246,7 +246,7 @@ where
                 receipts: self.receipts,
                 requests,
                 gas_used: self.gas_used,
-                state_changes: self.state_changes,
+                gwyneth_journal: self.gwyneth_journal,
                 gas_used_per_chain: self.gas_used_per_chain,
             },
         ))

@@ -7,7 +7,7 @@ use alloc::{boxed::Box, vec::Vec};
 use alloy_eips::eip7685::Requests;
 use revm::{
     context::result::ExecutionResult, database::State, inspector::NoOpInspector,
-    primitives::{HashMap, StateChanges}, Inspector
+    primitives::{HashMap, GwynethJournal}, Inspector
 };
 
 mod error;
@@ -33,7 +33,7 @@ pub struct BlockExecutionResult<T> {
     /// The total gas used by the block.
     pub gas_used: u64,
     /// The state changes
-    pub state_changes: Vec<StateChanges>,
+    pub gwyneth_journal: Vec<GwynethJournal>,
     /// The total gas used by the block.
     pub gas_used_per_chain: HashMap<u64, u64>,
 }

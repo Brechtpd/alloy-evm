@@ -245,7 +245,7 @@ where
                 receipts: self.receipts,
                 requests: Default::default(),
                 gas_used,
-                state_changes: Vec::new(),
+                gwyneth_journal: Vec::new(),
                 gas_used_per_chain: Default::default(),
             },
         ))
