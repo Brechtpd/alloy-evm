@@ -7,14 +7,7 @@ use core::{
     ops::{Deref, DerefMut},
 };
 use revm::{
-    primitives::{ChainAddress, HashMap, MultiChainTxKind as TxKind, hardfork::SpecId},
-    context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv},
-    context_interface::result::{EVMError, HaltReason, ResultAndState},
-    handler::{instructions::EthInstructions, EthFrame, EthPrecompiles, PrecompileProvider},
-    inspector::NoOpInspector,
-    interpreter::{interpreter::EthInterpreter, InterpreterResult},
-    precompile::{PrecompileSpecId, Precompiles},
-    Context, ExecuteEvm, InspectEvm, Inspector, MainBuilder, SystemCallEvm,
+    context::{BlockEnv, CfgEnv, Evm as RevmEvm, TxEnv}, context_interface::result::{EVMError, HaltReason, ResultAndState}, handler::{instructions::EthInstructions, EthFrame, EthPrecompiles, PrecompileProvider}, inspector::{inspectors::GwynethCompositeInspector, NoOpInspector}, interpreter::{interpreter::EthInterpreter, InterpreterResult}, precompile::{PrecompileSpecId, Precompiles}, primitives::{hardfork::SpecId, ChainAddress, HashMap, MultiChainTxKind as TxKind}, AutoSetupBuilder, Context, ExecuteEvm, InspectEvm, Inspector, SystemCallEvm
 };
 
 mod block;
@@ -102,11 +95,12 @@ impl<DB: MultiDatabase, I> EthEvmBuilder<DB, I> {
             )),
         };
 
+        let gwyneth_inspector = GwynethCompositeInspector::wrap(self.inspector);
         let inner = Context::mainnet()
             .with_blocks(self.block_env)
             .with_cfg(self.cfg_env)
             .with_db(self.db)
-            .build_mainnet_with_inspector(self.inspector)
+            .build_gwyneth_with_inspector(gwyneth_inspector)
             .with_precompiles(precompiles);
 
         EthEvm { inner, inspect: self.inspect }
@@ -122,7 +116,7 @@ impl<DB: MultiDatabase, I> EthEvmBuilder<DB, I> {
 pub struct EthEvm<DB: MultiDatabase, I, PRECOMPILE = EthPrecompiles> {
     inner: RevmEvm<
         EthEvmContext<DB>,
-        I,
+        GwynethCompositeInspector<I>,
         EthInstructions<EthInterpreter, EthEvmContext<DB>>,
         PRECOMPILE,
         EthFrame,
@@ -138,7 +132,7 @@ impl<DB: MultiDatabase, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
     pub const fn new(
         evm: RevmEvm<
             EthEvmContext<DB>,
-            I,
+            GwynethCompositeInspector<I>,
             EthInstructions<EthInterpreter, EthEvmContext<DB>>,
             PRECOMPILE,
             EthFrame,
@@ -153,7 +147,7 @@ impl<DB: MultiDatabase, I, PRECOMPILE> EthEvm<DB, I, PRECOMPILE> {
         self,
     ) -> RevmEvm<
         EthEvmContext<DB>,
-        I,
+        GwynethCompositeInspector<I>,
         EthInstructions<EthInterpreter, EthEvmContext<DB>>,
         PRECOMPILE,
         EthFrame,
@@ -265,13 +259,13 @@ where
     }
 
     fn components(&self) -> (&Self::DB, &Self::Inspector, &Self::Precompiles) {
-        (&self.inner.ctx.journaled_state.database, &self.inner.inspector, &self.inner.precompiles)
+        (&self.inner.ctx.journaled_state.database, &self.inner.inspector.custom_inspector, &self.inner.precompiles)
     }
 
     fn components_mut(&mut self) -> (&mut Self::DB, &mut Self::Inspector, &mut Self::Precompiles) {
         (
             &mut self.inner.ctx.journaled_state.database,
-            &mut self.inner.inspector,
+            &mut self.inner.inspector.custom_inspector,
             &mut self.inner.precompiles,
         )
     }
