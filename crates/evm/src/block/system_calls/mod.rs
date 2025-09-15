@@ -56,6 +56,7 @@ where
         evm: &mut impl Evm<DB: MultiChainDatabaseCommit>,
     ) -> Result<(), BlockExecutionError> {
         for (&chain_id, header) in headers.iter() {
+            println!("[alloy-evm] applying pre execution for {} block {}: {:?} {:?}", chain_id, header.number(), header.parent_hash(), header.parent_beacon_block_root());
             self.apply_blockhashes_contract_call(header.parent_hash(), evm, chain_id)?;
             self.apply_beacon_root_contract_call(header.parent_beacon_block_root(), evm, chain_id)?;
         }
