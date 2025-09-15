@@ -105,7 +105,10 @@ where
             self.spec.is_spurious_dragon_active_at_block(self.evm.block().number.saturating_to());
         self.evm.db_mut().set_state_clear_flag(state_clear_flag);
 
+        println!("[alloy-evm] apply_pre_execution_changes from ctx");
+
         for (&chain_id, ctx) in self.ctx.iter() {
+            println!("[alloy-evm] apply_pre_execution_changes from ctx {} {:?} {:?}", chain_id, ctx.parent_hash, ctx.parent_beacon_block_root);
             self.system_caller.apply_blockhashes_contract_call(ctx.parent_hash, &mut self.evm, chain_id)?;
             self.system_caller
                 .apply_beacon_root_contract_call(ctx.parent_beacon_block_root, &mut self.evm, chain_id)?;
